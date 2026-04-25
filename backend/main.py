@@ -270,8 +270,8 @@ async def create_test_trace():
 async def startup_event():
     """启动事件"""
     print("🚀 AgentWatch Backend started!")
-    print(f"   Version: 0.2.0")
-    print(f"   Docs: http://localhost:8000/docs")
+    print("   Version: 0.2.0")
+    print("   Docs: http://localhost:8000/docs")
 
 
 @app.on_event("shutdown")
