@@ -14,8 +14,7 @@ AI Agent 监控 Python 客户端库
 
 __version__ = "0.1.0"
 
-from .client import AgentWatch
-from .trace import TraceContext
+from .client import AgentWatch, TraceContext
 from .decorators import trace_agent
 
 __all__ = ["AgentWatch", "TraceContext", "trace_agent"]

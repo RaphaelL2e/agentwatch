@@ -294,7 +294,7 @@ class TraceContext:
         duration_ms = int((time.time() - self._start_time) * 1000)
         
         data = {
-            "status": self._status == "failed" ? "failed" : "completed",
+            "status": "failed" if self._status == "failed" else "completed",
             "duration_ms": duration_ms,
         }
         

@@ -179,6 +179,48 @@ async def get_model_costs():
     return TraceService.TOKEN_COSTS
 
 
+# ==================== Dashboard API ====================
+
+@app.get("/api/v1/dashboard", tags=["Dashboard"])
+async def get_dashboard():
+    """
+    获取 Dashboard 概览数据
+    
+    返回:
+    - total_traces: 总 trace 数
+    - running_traces: 运行中 trace 数
+    - completed_traces: 已完成 trace 数
+    - failed_traces: 失败 trace 数
+    - total_cost: 总成本
+    - avg_latency_ms: 平均延迟
+    - provider_distribution: Provider 分布
+    - model_distribution: Model 分布
+    """
+    stats = TraceService.get_stats()
+    
+    # Provider 和 Model 分布
+    provider_dist = {}
+    model_dist = {}
+    
+    for trace in TraceService.list_traces(page=1, page_size=1000).traces:
+        provider = str(trace.provider)
+        model = trace.model
+        
+        provider_dist[provider] = provider_dist.get(provider, 0) + 1
+        model_dist[model] = model_dist.get(model, 0) + 1
+    
+    return {
+        "total_traces": stats["total_traces"],
+        "running_traces": stats["running_traces"],
+        "completed_traces": stats["completed_traces"],
+        "failed_traces": stats["failed_traces"],
+        "total_cost": stats["total_cost"],
+        "avg_latency_ms": stats.get("avg_latency_ms", 0),
+        "provider_distribution": provider_dist,
+        "model_distribution": model_dist,
+    }
+
+
 # ==================== 测试端点 ====================
 
 @app.post("/api/v1/test/trace", response_model=TraceResponse, tags=["Test"])

@@ -10,7 +10,7 @@ from collections import defaultdict
 
 from models import (
     TraceCreate, TraceUpdate, TraceResponse, TraceListResponse,
-    TraceStatus, TraceEvent, CostSummary
+    TraceStatus, TraceEvent, CostSummary, AgentProvider
 )
 
 # 内存存储（Day 2先用内存，后续迁移到ClickHouse）
@@ -227,9 +227,18 @@ class TraceService:
         
         summaries = []
         for key, data in groups.items():
-            provider_str, model = key.split("_", 1)
+            parts = key.split("_", 1)
+            provider_str = parts[0]
+            model = parts[1] if len(parts) > 1 else ""
+            
+            # 将字符串转换为 AgentProvider 枚举
+            try:
+                provider_enum = AgentProvider(provider_str)
+            except ValueError:
+                provider_enum = AgentProvider.CUSTOM
+            
             summaries.append(CostSummary(
-                provider=provider_str,
+                provider=provider_enum,
                 model=model,
                 total_traces=data["total_traces"],
                 total_tokens=data["total_tokens"],
