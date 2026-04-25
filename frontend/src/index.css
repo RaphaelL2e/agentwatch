@@ -1,0 +1,35 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background-color: #0f172a;
+  color: #f8fafc;
+}
+
+/* 自定义样式 */
+.card {
+  @apply bg-slate-800 rounded-lg p-4 border border-slate-700;
+}
+
+.stat-card {
+  @apply bg-slate-800 rounded-lg p-6 border border-slate-700 hover:border-primary-500 transition-colors;
+}
+
+.trace-item {
+  @apply bg-slate-900 rounded-md p-4 border border-slate-700 hover:border-slate-500 transition-colors;
+}
+
+.btn-primary {
+  @apply bg-primary-600 hover:bg-primary-700 text-white font-medium py-2 px-4 rounded-md transition-colors;
+}
+
+.btn-secondary {
+  @apply bg-slate-700 hover:bg-slate-600 text-white font-medium py-2 px-4 rounded-md transition-colors;
+}

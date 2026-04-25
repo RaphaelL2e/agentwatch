@@ -1,9 +1,21 @@
-"""
-AgentWatch Backend Dependencies
-"""
+# AgentWatch Backend Dependencies
 
-fastapi>=0.100.0
-uvicorn>=0.23.0
-pydantic>=2.0.0
-clickhouse-driver>=0.2.0
-python-dotenv>=1.0.0
+# Core
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+pydantic>=2.5.0
+
+# Database (Day 2 用内存存储，后续添加)
+# clickhouse-driver>=0.2.0
+# sqlalchemy>=2.0.0
+
+# Async support
+asyncio>=3.4.3
+
+# Testing
+pytest>=7.4.0
+httpx>=0.26.0
+
+# Utilities
+python-multipart>=0.0.6
+python-dateutil>=2.8.2
