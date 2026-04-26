@@ -5,28 +5,32 @@ build-backend = "hatchling.build"
 [project]
 name = "agentwatch"
 version = "0.1.0"
-description = "AgentWatch SDK - AI Agent Monitoring Python Client"
+description = "AgentWatch SDK - Open-source AI Agent Monitoring Platform for Python"
 readme = "README.md"
-license = "MIT"
+license = "Apache-2.0"
 requires-python = ">=3.8"
 authors = [
-    {name = "RaphaelL2e", email = "liyafei@sensetime.com"}
+    {name = "RaphaelL2e", email = "liyafei@example.com"}
 ]
-keywords = ["ai", "agent", "monitoring", "tracing", "observability"]
+keywords = ["ai", "agent", "monitoring", "tracing", "observability", "llm", "openai", "anthropic", "deepseek"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: System :: Monitoring",
 ]
 
 dependencies = [
     "httpx>=0.24.0",
+    "pydantic>=2.0.0",
 ]
 
 [project.optional-dependencies]
@@ -34,12 +38,15 @@ dev = [
     "pytest>=7.0.0",
     "black>=23.0.0",
     "ruff>=0.1.0",
+    "mypy>=1.0.0",
 ]
 
 [project.urls]
 Homepage = "https://github.com/RaphaelL2e/agentwatch"
 Documentation = "https://github.com/RaphaelL2e/agentwatch#readme"
 Repository = "https://github.com/RaphaelL2e/agentwatch.git"
+Issues = "https://github.com/RaphaelL2e/agentwatch/issues"
+Changelog = "https://github.com/RaphaelL2e/agentwatch/releases"
 
 [tool.hatch.build.targets.wheel]
 packages = ["agentwatch"]
