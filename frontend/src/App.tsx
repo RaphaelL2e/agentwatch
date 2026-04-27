@@ -3,6 +3,8 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import Dashboard from './components/Dashboard'
 import TraceDetail from './components/TraceDetail'
 import CostComparison from './components/CostComparison'
+import Settings from './components/Settings'
+import About from './components/About'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -43,6 +45,18 @@ function App() {
                   >
                     Cost Comparison
                   </a>
+                  <a 
+                    href="/settings" 
+                    className="text-slate-400 hover:text-white transition-colors text-sm"
+                  >
+                    Settings
+                  </a>
+                  <a 
+                    href="/about" 
+                    className="text-slate-400 hover:text-white transition-colors text-sm"
+                  >
+                    About
+                  </a>
                 </nav>
               </div>
             </div>
@@ -53,6 +67,8 @@ function App() {
               <Route path="/" element={<Dashboard />} />
               <Route path="/trace/:traceId" element={<TraceDetail />} />
               <Route path="/costs" element={<CostComparison />} />
+              <Route path="/settings" element={<Settings />} />
+              <Route path="/about" element={<About />} />
             </Routes>
           </main>
           
