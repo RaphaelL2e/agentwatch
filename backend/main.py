@@ -398,8 +398,8 @@ async def get_timeline(
                 key = trace.created_at.strftime("%Y-%m-%d %H:00")
             
             timeline_data[key]["traces"] += 1
-            timeline_data[key]["cost"] += trace.cost or 0
-            timeline_data[key]["tokens"] += (trace.input_tokens or 0) + (trace.output_tokens or 0)
+            timeline_data[key]["cost"] += trace.total_cost or 0
+            timeline_data[key]["tokens"] += (trace.total_input_tokens or 0) + (trace.total_output_tokens or 0)
     
     # 转换为列表并排序
     result = [
