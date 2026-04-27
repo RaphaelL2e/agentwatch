@@ -6,6 +6,8 @@
 
 **AgentWatch** 是一个开源的 AI Agent 监控平台，帮助开发者追踪、分析和优化 AI Agent 的运行性能和成本。
 
+**核心发现：DeepSeek 成本仅 OpenAI 的 1/107！**
+
 ## 🎯 核心功能
 
 - **Trace 追踪** - 完整记录 Agent 执行流程，包括输入输出、Token 使用、延迟等
@@ -132,11 +134,15 @@ agentwatch/
 
 ## 📈 Roadmap
 
-### Week 1 (当前)
+### Week 1 (当前) ✅
 - [x] FastAPI 后端骨架
 - [x] Trace API 端点
 - [x] Python SDK
-- [x] 基础 Demo
+- [x] 基础 Dashboard
+- [x] CI Pipeline
+- [x] 14个 Backend 测试
+- [x] 6个前端页面 (Dashboard/TraceDetail/CostComparison/Settings/About/Charts)
+- [x] 发布文档 (Product Hunt/博客/API文档/架构文档)
 
 ### Week 2
 - [ ] React Dashboard 完善
