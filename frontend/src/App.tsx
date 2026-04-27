@@ -5,6 +5,7 @@ import TraceDetail from './components/TraceDetail'
 import CostComparison from './components/CostComparison'
 import Settings from './components/Settings'
 import About from './components/About'
+import Charts from './components/Charts'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -57,6 +58,12 @@ function App() {
                   >
                     About
                   </a>
+                  <a 
+                    href="/charts" 
+                    className="text-slate-400 hover:text-white transition-colors text-sm"
+                  >
+                    Charts
+                  </a>
                 </nav>
               </div>
             </div>
@@ -69,6 +76,7 @@ function App() {
               <Route path="/costs" element={<CostComparison />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/about" element={<About />} />
+              <Route path="/charts" element={<Charts />} />
             </Routes>
           </main>
           

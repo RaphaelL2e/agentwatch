@@ -1,165 +1,281 @@
 """
-AgentWatch 完整 Demo
-
-模拟真实 AI Agent 工作流程，展示完整的监控功能：
-- 多步骤 Agent 执行
-- Token 成本追踪
-- 性能分析
-- 错误处理
+AgentWatch SDK 完整示例
+演示各种使用场景
 """
 
-import time
-import random
-from agentwatch import AgentWatch
+import os
+from agentwatch import AgentWatch, trace_agent, TracedAgent
 
-# 创建客户端
-aw = AgentWatch(api_url="http://localhost:8000")
+# ============================================
+# 示例 1: 基础使用 - 上下文管理器
+# ============================================
 
-print("🚀 AgentWatch Complete Demo")
-print("=" * 50)
 
-# ==================== 场景1: 代码分析 Agent ====================
+def example_basic():
+    """最简单的使用方式"""
+    aw = AgentWatch(api_url="http://localhost:8000")
 
-print("\n📊 场景1: 代码分析 Agent")
-print("-" * 30)
+    with aw.trace("chat_agent", model="gpt-4o") as trace:
+        # 你的 LLM 调用逻辑
+        # 这里模拟 OpenAI API 调用
+        print("Calling GPT-4o...")
 
-with aw.trace(
-    agent_id="code_analyzer_001",
-    agent_name="CodeAnalyzer",
-    provider="openai",
-    model="gpt-4o",
-    prompt="分析这段 Python 代码的性能瓶颈",
-    metadata={"project": "agentwatch", "file": "main.py"}
-) as trace:
-    
-    # 步骤1: 读取代码
-    trace.add_event(
-        event_type="tool_use",
-        content="读取 main.py 文件",
-        metadata={"tool": "read_file", "file": "main.py"}
-    )
-    time.sleep(0.1)
-    
-    # 步骤2: 分析代码结构
-    trace.log_tokens(input=500, output=200)
-    trace.add_event(
-        event_type="call",
-        content="分析代码结构",
-        latency_ms=150,
-    )
-    time.sleep(0.15)
-    
-    # 步骤3: 性能建议
-    trace.log_tokens(input=200, output=800)
-    trace.add_event(
-        event_type="response",
-        content="生成性能优化建议",
-        latency_ms=800,
-    )
-    
-print(f"✅ Trace完成: {trace.trace_id}")
+        # 记录 Token 使用
+        trace.log_tokens(input=100, output=200)
 
-# ==================== 场景2: 多模型对比 Agent ====================
+        print(f"Trace ID: {trace.trace_id}")
+        print(f"Agent: {trace.agent_name}")
 
-print("\n📈 场景2: 多模型成本对比")
-print("-" * 30)
+    # 获取统计
+    stats = aw.get_stats()
+    print(f"Total traces: {stats['total_traces']}")
+    print(f"Total cost: ${stats['total_cost']}")
 
-models = [
-    ("openai", "gpt-4o-mini", 100, 300),
-    ("anthropic", "claude-3.5-sonnet", 150, 400),
-    ("deepseek", "deepseek-v4", 200, 500),
-]
+    aw.close()
 
-for provider, model, input_tokens, output_tokens in models:
-    with aw.trace(
-        agent_id="benchmark_agent",
-        agent_name="BenchmarkAgent",
-        provider=provider,
-        model=model,
-        prompt="解决同一个问题的成本对比测试",
-    ) as trace:
-        trace.log_tokens(input=input_tokens, output=output_tokens)
-        trace.add_event(
-            event_type="response",
-            content=f"{model} 完成任务",
-            latency_ms=random.randint(100, 500),
-        )
-    
-    print(f"  {model}: {input_tokens + output_tokens} tokens")
 
-# ==================== 场景3: 错误处理演示 ====================
+# ============================================
+# 示例 2: 装饰器使用
+# ============================================
 
-print("\n⚠️ 场景3: 错误处理演示")
-print("-" * 30)
 
-try:
-    with aw.trace(
-        agent_id="error_demo",
-        agent_name="ErrorAgent",
-        provider="openai",
-        model="gpt-4o",
-        prompt="模拟错误场景",
-    ) as trace:
-        trace.log_tokens(input=50, output=0)
-        trace.add_event(
-            event_type="call",
-            content="开始处理",
-        )
-        
-        # 模拟错误
-        raise ValueError("模拟 Agent 执行错误")
-        
-except ValueError as e:
-    # Trace 自动记录错误（上下文管理器会调用 log_error）
-    print(f"❌ 错误已捕获: {e}")
+@trace_agent("qa_agent", model="gpt-4o-mini", provider="openai")
+def answer_question(question: str):
+    """使用装饰器自动追踪"""
+    # 模拟 LLM 调用
+    print(f"Answering: {question}")
 
-# ==================== 获取统计数据 ====================
+    # 返回模拟的响应对象（包含 usage）
+    return {
+        "answer": "This is a sample answer",
+        "usage": {"prompt_tokens": 50, "completion_tokens": 100},
+    }
 
-print("\n📊 统计数据")
-print("-" * 30)
 
-stats = aw.get_stats()
-print(f"总 Traces: {stats['total_traces']}")
-print(f"完成: {stats['completed_traces']}")
-print(f"失败: {stats['failed_traces']}")
-print(f"总成本: ${stats['total_cost']:.6f}")
+def example_decorator():
+    """装饰器示例"""
+    result = answer_question("What is AI?")
+    print(f"Answer: {result['answer']}")
 
-traces = aw.list_traces(page=1, page_size=10)
-print(f"\n最近 Traces ({traces['total']} 条):")
-for t in traces['traces'][:5]:
-    print(f"  - {t['trace_id'][:16]}... | {t['agent_name']} | {t['model']} | ${t['total_cost']:.6f}")
 
-cost_summary = aw.get_cost_summary()
-print(f"\n成本汇总:")
-for cs in cost_summary:
-    print(f"  - {cs['provider']}/{cs['model']}: {cs['total_traces']} traces, ${cs['total_cost']:.6f}")
+# ============================================
+# 示例 3: DeepSeek 成本优化
+# ============================================
 
-# ==================== Dashboard API 测试 ====================
 
-print("\n🎯 Dashboard 数据")
-print("-" * 30)
+def example_cost_comparison():
+    """展示 DeepSeek 成本优势"""
+    aw = AgentWatch()
 
-import requests
+    # 使用 OpenAI
+    with aw.trace("openai_agent", model="gpt-4o", provider="openai") as t1:
+        t1.log_tokens(input=10000, output=20000)
 
-# 获取 Dashboard 数据
-resp = requests.get("http://localhost:8000/api/v1/dashboard")
-dashboard = resp.json()
+    # 使用 DeepSeek
+    with aw.trace("deepseek_agent", model="deepseek-chat", provider="deepseek") as t2:
+        t2.log_tokens(input=10000, output=20000)
 
-print(f"总 Traces: {dashboard['total_traces']}")
-print(f"运行中: {dashboard['running_traces']}")
-print(f"已完成: {dashboard['completed_traces']}")
-print(f"失败: {dashboard['failed_traces']}")
-print(f"总成本: ${dashboard['total_cost']:.6f}")
-print(f"平均延迟: {dashboard['avg_latency_ms']:.1f}ms")
+    # 获取成本对比
+    cost_summary = aw.get_cost_summary()
 
-print(f"\nProvider 分布:")
-for p, count in dashboard['provider_distribution'].items():
-    print(f"  - {p}: {count}")
+    print("\n=== Cost Comparison ===")
+    print(f"OpenAI cost: ${cost_summary['by_provider']['openai']['total_cost']}")
+    print(f"DeepSeek cost: ${cost_summary['by_provider']['deepseek']['total_cost']}")
+    print(f"Savings: {cost_summary['cost_savings']['deepseek_vs_openai']}x cheaper!")
 
-print(f"\nModel 分布:")
-for m, count in dashboard['model_distribution'].items():
-    print(f"  - {m}: {count}")
+    aw.close()
 
-aw.close()
-print("\n✅ Demo 完成！")
-print("=" * 50)
+
+# ============================================
+# 示例 4: 多 Provider 监控
+# ============================================
+
+
+def example_multi_provider():
+    """同时监控多个 Provider"""
+    aw = AgentWatch()
+
+    providers = [
+        ("openai", "gpt-4o-mini"),
+        ("anthropic", "claude-3-haiku"),
+        ("deepseek", "deepseek-chat"),
+        ("google", "gemini-1.5-flash"),
+    ]
+
+    for provider, model in providers:
+        with aw.trace(f"{provider}_agent", model=model, provider=provider) as trace:
+            # 模拟不同模型的调用
+            trace.log_tokens(input=500, output=1000)
+            print(f"Called {provider}/{model}")
+
+    # 获取总体统计
+    stats = aw.get_stats()
+
+    print("\n=== Multi-Provider Stats ===")
+    print(f"Total traces: {stats['total_traces']}")
+    print(f"Total cost: ${stats['total_cost']:.4f}")
+
+    for provider, data in stats["by_provider"].items():
+        print(f"{provider}: {data['traces']} traces, ${data['cost']:.4f}")
+
+    aw.close()
+
+
+# ============================================
+# 示例 5: TracedAgent 类使用
+# ============================================
+
+
+class MyChatAgent(TracedAgent):
+    """自定义 Agent 类"""
+
+    def __init__(self):
+        super().__init__(name="chat_agent", model="gpt-4o", provider="openai")
+
+    def run(self, prompt: str):
+        """运行 Agent"""
+        self.start_trace(prompt=prompt)
+
+        try:
+            # 模拟 LLM 调用
+            print(f"Processing: {prompt}")
+
+            # 记录 Token
+            self.log_tokens(input=100, output=200)
+
+            result = f"Response to: {prompt}"
+
+            self.end_trace()
+            return result
+
+        except Exception as e:
+            self.log_error(str(e))
+            self.end_trace()
+            raise
+
+
+def example_traced_agent():
+    """TracedAgent 类示例"""
+    agent = MyChatAgent()
+
+    try:
+        result = agent.run("Hello, AI!")
+        print(f"Result: {result}")
+    finally:
+        agent.close()
+
+
+# ============================================
+# 示例 6: 错误追踪
+# ============================================
+
+
+def example_error_tracking():
+    """追踪错误"""
+    aw = AgentWatch()
+
+    try:
+        with aw.trace("error_agent", model="gpt-4o") as trace:
+            # 模拟一个失败的调用
+            raise Exception("API rate limit exceeded")
+    except Exception as e:
+        # Trace 会自动记录错误
+        print(f"Error tracked: {e}")
+
+    # 检查失败的 traces
+    traces = aw.list_traces(status="failed")
+    print(f"Failed traces: {len(traces['traces'])}")
+
+    aw.close()
+
+
+# ============================================
+# 示例 7: 批量追踪
+# ============================================
+
+
+def example_batch():
+    """批量创建多个 traces"""
+    aw = AgentWatch()
+
+    # 创建 10 个 traces
+    for i in range(10):
+        with aw.trace(
+            f"batch_agent_{i}", model="deepseek-chat", provider="deepseek"
+        ) as trace:
+            trace.log_tokens(input=100, output=200)
+
+    # 获取统计
+    stats = aw.get_stats()
+    print(f"Created {stats['total_traces']} traces")
+    print(f"Total cost: ${stats['total_cost']}")
+
+    aw.close()
+
+
+# ============================================
+# 示例 8: 实时监控
+# ============================================
+
+
+def example_realtime():
+    """模拟实时监控场景"""
+    aw = AgentWatch()
+
+    # 模拟连续的 Agent 调用
+    for i in range(5):
+        with aw.trace(f"stream_agent_{i}", model="gpt-4o-mini") as trace:
+            # 添加多个事件
+            trace.add_event("llm_call", input_tokens=50)
+            trace.add_event("tool_use", input_tokens=20, output_tokens=30)
+            trace.add_event("llm_response", output_tokens=100)
+
+            print(f"Agent {i}: Added 3 events")
+
+    # 获取 Dashboard 数据
+    dashboard = aw._request("GET", "/api/v1/dashboard")
+
+    print("\n=== Dashboard ===")
+    print(f"Running: {dashboard['summary']['running']}")
+    print(f"Completed: {dashboard['summary']['completed']}")
+    print(f"Recent traces: {len(dashboard['recent_traces'])}")
+
+    aw.close()
+
+
+# ============================================
+# 运行所有示例
+# ============================================
+
+if __name__ == "__main__":
+    print("=" * 50)
+    print("AgentWatch SDK Examples")
+    print("=" * 50)
+
+    print("\n[Example 1] Basic Usage")
+    example_basic()
+
+    print("\n[Example 2] Decorator")
+    example_decorator()
+
+    print("\n[Example 3] Cost Comparison")
+    example_cost_comparison()
+
+    print("\n[Example 4] Multi-Provider")
+    example_multi_provider()
+
+    print("\n[Example 5] TracedAgent Class")
+    example_traced_agent()
+
+    print("\n[Example 6] Error Tracking")
+    example_error_tracking()
+
+    print("\n[Example 7] Batch Traces")
+    example_batch()
+
+    print("\n[Example 8] Realtime Monitoring")
+    example_realtime()
+
+    print("\n" + "=" * 50)
+    print("All examples completed!")
+    print("=" * 50)
