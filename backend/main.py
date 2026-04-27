@@ -1,13 +1,16 @@
 """
 AgentWatch Backend
-FastAPI 主入口 - Day 2完整实现
+FastAPI 主入口 - 支持 WebSocket 实时推送
 """
 
 import time
+import asyncio
+import json
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Optional, List
+from collections import defaultdict
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 from models import (
@@ -29,7 +32,7 @@ START_TIME = time.time()
 app = FastAPI(
     title="AgentWatch",
     description="AI Agent Security Monitoring Platform - Track, Debug, and Optimize Your AI Agents",
-    version="0.2.0",
+    version="0.3.0",
     docs_url="/docs",
     redoc_url="/redoc",
 )
@@ -44,6 +47,60 @@ app.add_middleware(
 )
 
 
+# ==================== WebSocket 管理 ====================
+
+class ConnectionManager:
+    """WebSocket 连接管理器"""
+    
+    def __init__(self):
+        self.active_connections: List[WebSocket] = []
+        self._lock = asyncio.Lock()
+    
+    async def connect(self, websocket: WebSocket):
+        """接受新连接"""
+        await websocket.accept()
+        async with self._lock:
+            self.active_connections.append(websocket)
+        print(f"📡 WebSocket connected. Total: {len(self.active_connections)}")
+    
+    async def disconnect(self, websocket: WebSocket):
+        """断开连接"""
+        async with self._lock:
+            if websocket in self.active_connections:
+                self.active_connections.remove(websocket)
+        print(f"📡 WebSocket disconnected. Total: {len(self.active_connections)}")
+    
+    async def broadcast(self, message: dict):
+        """广播消息给所有连接"""
+        if not self.active_connections:
+            return
+        
+        async with self._lock:
+            connections = list(self.active_connections)
+        
+        disconnected = []
+        for connection in connections:
+            try:
+                await connection.send_json(message)
+            except Exception:
+                disconnected.append(connection)
+        
+        # 清理断开的连接
+        for conn in disconnected:
+            if conn in self.active_connections:
+                self.active_connections.remove(conn)
+    
+    async def send_to(self, websocket: WebSocket, message: dict):
+        """发送消息给特定连接"""
+        try:
+            await websocket.send_json(message)
+        except Exception:
+            await self.disconnect(websocket)
+
+
+manager = ConnectionManager()
+
+
 # ==================== 基础端点 ====================
 
 
@@ -52,9 +109,10 @@ async def root():
     """API根路径"""
     return {
         "message": "AgentWatch API",
-        "version": "0.2.0",
+        "version": "0.3.0",
         "docs": "/docs",
         "status": "running",
+        "websocket": "/ws",
     }
 
 
@@ -64,7 +122,7 @@ async def health():
     stats = TraceService.get_stats()
     return HealthCheck(
         status="healthy",
-        version="0.2.0",
+        version="0.3.0",
         uptime_seconds=time.time() - START_TIME,
         database_connected=True,  # 内存存储总是连接
         traces_count=stats["total_traces"],
@@ -93,7 +151,16 @@ async def create_trace(trace_data: TraceCreate):
     - **user_id**: 可选用户ID
     - **prompt**: 可选初始提示词
     """
-    return TraceService.create_trace(trace_data)
+    trace = TraceService.create_trace(trace_data)
+    
+    # 广播新 trace 事件
+    await manager.broadcast({
+        "type": "trace_created",
+        "data": trace.model_dump(),
+        "timestamp": datetime.utcnow().isoformat(),
+    })
+    
+    return trace
 
 
 @app.get("/api/v1/trace/{trace_id}", response_model=TraceResponse, tags=["Trace"])
@@ -111,6 +178,14 @@ async def update_trace(trace_id: str, update_data: TraceUpdate):
     trace = TraceService.update_trace(trace_id, update_data)
     if not trace:
         raise HTTPException(status_code=404, detail=f"Trace {trace_id} not found")
+    
+    # 广播更新事件
+    await manager.broadcast({
+        "type": "trace_updated",
+        "data": trace.model_dump(),
+        "timestamp": datetime.utcnow().isoformat(),
+    })
+    
     return trace
 
 
@@ -120,6 +195,14 @@ async def delete_trace(trace_id: str):
     success = TraceService.delete_trace(trace_id)
     if not success:
         raise HTTPException(status_code=404, detail=f"Trace {trace_id} not found")
+    
+    # 广播删除事件
+    await manager.broadcast({
+        "type": "trace_deleted",
+        "data": {"trace_id": trace_id},
+        "timestamp": datetime.utcnow().isoformat(),
+    })
+    
     return {"message": f"Trace {trace_id} deleted", "success": True}
 
 
@@ -131,6 +214,18 @@ async def add_trace_event(trace_id: str, event: TraceEvent):
     trace = TraceService.add_event(trace_id, event)
     if not trace:
         raise HTTPException(status_code=404, detail=f"Trace {trace_id} not found")
+    
+    # 广播事件添加
+    await manager.broadcast({
+        "type": "trace_event",
+        "data": {
+            "trace_id": trace_id,
+            "event": event.model_dump(),
+            "trace": trace.model_dump(),
+        },
+        "timestamp": datetime.utcnow().isoformat(),
+    })
+    
     return trace
 
 
@@ -208,12 +303,20 @@ async def get_dashboard():
     - avg_latency_ms: 平均延迟
     - provider_distribution: Provider 分布
     - model_distribution: Model 分布
+    - recent_traces: 最近 traces
     """
     stats = TraceService.get_stats()
 
     # Provider 和 Model 分布
     provider_dist = {}
     model_dist = {}
+    
+    # 计算延迟分布
+    latencies = []
+    
+    # 最近 traces
+    recent = TraceService.list_traces(page=1, page_size=10)
+    recent_traces = [t.model_dump() for t in recent.traces]
 
     for trace in TraceService.list_traces(page=1, page_size=1000).traces:
         provider = str(trace.provider)
@@ -221,6 +324,27 @@ async def get_dashboard():
 
         provider_dist[provider] = provider_dist.get(provider, 0) + 1
         model_dist[model] = model_dist.get(model, 0) + 1
+        
+        # 收集延迟数据
+        if trace.latency_ms:
+            latencies.append(trace.latency_ms)
+
+    # 计算延迟分布
+    latency_distribution = {}
+    if latencies:
+        buckets = [0, 100, 500, 1000, 2000, 5000, 10000]  # ms
+        bucket_labels = ["<100ms", "100-500ms", "500ms-1s", "1-2s", "2-5s", "5-10s", ">10s"]
+        
+        for label in bucket_labels:
+            latency_distribution[label] = 0
+        
+        for latency in latencies:
+            for i, bucket in enumerate(buckets):
+                if latency < bucket:
+                    latency_distribution[bucket_labels[max(0, i-1)]] += 1
+                    break
+            else:
+                latency_distribution[bucket_labels[-1]] += 1
 
     return {
         "total_traces": stats["total_traces"],
@@ -231,7 +355,205 @@ async def get_dashboard():
         "avg_latency_ms": stats.get("avg_latency_ms", 0),
         "provider_distribution": provider_dist,
         "model_distribution": model_dist,
+        "latency_distribution": latency_distribution,
+        "recent_traces": recent_traces,
     }
+
+
+# ==================== Analytics API ====================
+
+
+@app.get("/api/v1/analytics/timeline", tags=["Analytics"])
+async def get_timeline(
+    interval: str = Query("hour", description="时间间隔: minute, hour, day"),
+    hours: int = Query(24, ge=1, le=168, description="查询时间范围(小时)"),
+):
+    """
+    获取时间线数据
+    
+    用于绘制 trace 数量随时间变化的图表
+    """
+    end = datetime.utcnow()
+    start = end - timedelta(hours=hours)
+    
+    # 获取所有 traces
+    traces = TraceService.list_traces(
+        page=1,
+        page_size=10000,
+        start_time=start,
+        end_time=end,
+    )
+    
+    # 按时间分组
+    timeline_data = defaultdict(lambda: {"traces": 0, "cost": 0.0, "tokens": 0})
+    
+    for trace in traces.traces:
+        if trace.created_at:
+            # 根据间隔格式化时间
+            if interval == "minute":
+                key = trace.created_at.strftime("%Y-%m-%d %H:%M")
+            elif interval == "day":
+                key = trace.created_at.strftime("%Y-%m-%d")
+            else:  # hour
+                key = trace.created_at.strftime("%Y-%m-%d %H:00")
+            
+            timeline_data[key]["traces"] += 1
+            timeline_data[key]["cost"] += trace.cost or 0
+            timeline_data[key]["tokens"] += (trace.input_tokens or 0) + (trace.output_tokens or 0)
+    
+    # 转换为列表并排序
+    result = [
+        {
+            "time": k,
+            "traces": v["traces"],
+            "cost": round(v["cost"], 6),
+            "tokens": v["tokens"],
+        }
+        for k, v in sorted(timeline_data.items())
+    ]
+    
+    return {"interval": interval, "data": result}
+
+
+@app.get("/api/v1/analytics/providers", tags=["Analytics"])
+async def get_provider_analytics():
+    """
+    获取 Provider 分析数据
+    
+    返回每个 provider 的详细统计
+    """
+    traces = TraceService.list_traces(page=1, page_size=10000)
+    
+    provider_stats = defaultdict(lambda: {
+        "traces": 0,
+        "total_cost": 0.0,
+        "total_tokens": 0,
+        "total_input_tokens": 0,
+        "total_output_tokens": 0,
+        "avg_latency_ms": 0,
+        "latencies": [],
+        "models": set(),
+        "success_count": 0,
+        "failed_count": 0,
+    })
+    
+    for trace in traces.traces:
+        provider = str(trace.provider)
+        stats = provider_stats[provider]
+        
+        stats["traces"] += 1
+        stats["total_cost"] += trace.cost or 0
+        stats["total_input_tokens"] += trace.input_tokens or 0
+        stats["total_output_tokens"] += trace.output_tokens or 0
+        stats["total_tokens"] += (trace.input_tokens or 0) + (trace.output_tokens or 0)
+        
+        if trace.model:
+            stats["models"].add(trace.model)
+        
+        if trace.latency_ms:
+            stats["latencies"].append(trace.latency_ms)
+        
+        if trace.status == "completed":
+            stats["success_count"] += 1
+        elif trace.status == "failed":
+            stats["failed_count"] += 1
+    
+    # 计算平均延迟和成功率
+    result = []
+    for provider, stats in provider_stats.items():
+        avg_latency = sum(stats["latencies"]) / len(stats["latencies"]) if stats["latencies"] else 0
+        success_rate = stats["success_count"] / stats["traces"] * 100 if stats["traces"] > 0 else 0
+        
+        result.append({
+            "provider": provider,
+            "traces": stats["traces"],
+            "total_cost": round(stats["total_cost"], 6),
+            "total_tokens": stats["total_tokens"],
+            "input_tokens": stats["total_input_tokens"],
+            "output_tokens": stats["total_output_tokens"],
+            "avg_latency_ms": round(avg_latency, 2),
+            "success_rate": round(success_rate, 2),
+            "models": list(stats["models"]),
+        })
+    
+    return result
+
+
+# ==================== WebSocket 端点 ====================
+
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    """
+    WebSocket 实时推送端点
+    
+    消息类型:
+    - trace_created: 新 trace 创建
+    - trace_updated: trace 更新
+    - trace_deleted: trace 删除
+    - trace_event: trace 事件添加
+    - stats_update: 统计更新
+    - ping/pong: 心跳
+    """
+    await manager.connect(websocket)
+    
+    try:
+        # 发送欢迎消息
+        await manager.send_to(websocket, {
+            "type": "connected",
+            "message": "Connected to AgentWatch real-time updates",
+            "timestamp": datetime.utcnow().isoformat(),
+        })
+        
+        # 发送当前统计
+        stats = TraceService.get_stats()
+        await manager.send_to(websocket, {
+            "type": "stats_update",
+            "data": stats,
+            "timestamp": datetime.utcnow().isoformat(),
+        })
+        
+        while True:
+            # 等待客户端消息
+            data = await websocket.receive_text()
+            
+            try:
+                message = json.loads(data)
+                
+                if message.get("type") == "ping":
+                    await manager.send_to(websocket, {
+                        "type": "pong",
+                        "timestamp": datetime.utcnow().isoformat(),
+                    })
+                
+                elif message.get("type") == "subscribe":
+                    # 未来可扩展: 订阅特定 trace 或 agent
+                    await manager.send_to(websocket, {
+                        "type": "subscribed",
+                        "channels": message.get("channels", ["all"]),
+                        "timestamp": datetime.utcnow().isoformat(),
+                    })
+                
+                elif message.get("type") == "get_stats":
+                    stats = TraceService.get_stats()
+                    await manager.send_to(websocket, {
+                        "type": "stats_update",
+                        "data": stats,
+                        "timestamp": datetime.utcnow().isoformat(),
+                    })
+                    
+            except json.JSONDecodeError:
+                await manager.send_to(websocket, {
+                    "type": "error",
+                    "message": "Invalid JSON",
+                    "timestamp": datetime.utcnow().isoformat(),
+                })
+                
+    except WebSocketDisconnect:
+        await manager.disconnect(websocket)
+    except Exception as e:
+        print(f"WebSocket error: {e}")
+        await manager.disconnect(websocket)
 
 
 # ==================== 测试端点 ====================
@@ -275,7 +597,16 @@ async def create_test_trace():
     TraceService.add_event(trace.trace_id, event2)
     TraceService.update_trace(trace.trace_id, TraceUpdate(status=TraceStatus.COMPLETED))
 
-    return TraceService.get_trace(trace.trace_id)
+    final_trace = TraceService.get_trace(trace.trace_id)
+    
+    # 广播测试事件
+    await manager.broadcast({
+        "type": "test_trace_created",
+        "data": final_trace.model_dump(),
+        "timestamp": datetime.utcnow().isoformat(),
+    })
+    
+    return final_trace
 
 
 # ==================== 启动事件 ====================
@@ -285,8 +616,9 @@ async def create_test_trace():
 async def startup_event():
     """启动事件"""
     print("🚀 AgentWatch Backend started!")
-    print("   Version: 0.2.0")
+    print("   Version: 0.3.0")
     print("   Docs: http://localhost:8000/docs")
+    print("   WebSocket: ws://localhost:8000/ws")
 
 
 @app.on_event("shutdown")
