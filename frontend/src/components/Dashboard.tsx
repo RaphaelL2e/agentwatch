@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import { Link } from 'react-router-dom'
 import { Activity, DollarSign, Clock, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react'
 import { api } from '../api'
 
@@ -51,7 +52,10 @@ function StatusBadge({ status }: { status: string }) {
 // Trace 列表项
 function TraceItem({ trace }: { trace: any }) {
   return (
-    <div className="trace-item">
+    <Link 
+      to={`/trace/${trace.trace_id}`}
+      className="trace-item block cursor-pointer hover:border-primary-500 transition-colors"
+    >
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-3">
           <StatusBadge status={trace.status} />
@@ -82,9 +86,9 @@ function TraceItem({ trace }: { trace: any }) {
       </div>
       
       <div className="mt-2 text-xs text-slate-500">
-        Trace ID: {trace.trace_id}
+        Trace ID: {trace.trace_id} → Click to view details
       </div>
-    </div>
+    </Link>
   )
 }
 
@@ -196,6 +200,13 @@ function Dashboard() {
           >
             Create Test Trace
           </button>
+          <Link 
+            to="/costs"
+            className="btn-secondary inline-flex items-center gap-2"
+          >
+            <DollarSign className="w-4 h-4" />
+            Cost Comparison
+          </Link>
           <button 
             onClick={() => window.location.reload()}
             className="btn-secondary"
