@@ -16,6 +16,7 @@ import httpx
 @dataclass
 class AgentWatchConfig:
     """AgentWatch 配置"""
+
     api_url: str = "http://localhost:8000"
     api_key: Optional[str] = None
     timeout: float = 30.0
@@ -25,10 +26,10 @@ class AgentWatchConfig:
 class AgentWatch:
     """
     AgentWatch SDK 主客户端
-    
+
     使用示例:
         aw = AgentWatch()
-        
+
         # 手动追踪
         trace = aw.create_trace(
             agent_id="my_agent",
@@ -36,18 +37,18 @@ class AgentWatch:
             provider="openai",
             model="gpt-4o"
         )
-        
+
         # 添加事件
         trace.add_event("call", input_tokens=100)
         trace.add_event("response", output_tokens=200)
         trace.complete()
-        
+
         # 或使用上下文管理器自动追踪
         with aw.trace("my_agent", model="gpt-4o") as t:
             result = llm_call()
             t.log_tokens(input=100, output=result.tokens)
     """
-    
+
     def __init__(
         self,
         api_url: Optional[str] = None,
@@ -55,26 +56,26 @@ class AgentWatch:
         config: Optional[AgentWatchConfig] = None,
     ):
         self.config = config or AgentWatchConfig()
-        
+
         if api_url:
             self.config.api_url = api_url
         if api_key:
             self.config.api_key = api_key
-        
+
         # 从环境变量读取
         self.config.api_url = os.getenv("AGENTWATCH_API_URL", self.config.api_url)
         self.config.api_key = os.getenv("AGENTWATCH_API_KEY", self.config.api_key)
-        
+
         self._client = httpx.Client(timeout=self.config.timeout)
         self._active_traces: Dict[str, "TraceContext"] = {}
-    
+
     def _get_headers(self) -> Dict[str, str]:
         """获取请求头"""
         headers = {"Content-Type": "application/json"}
         if self.config.api_key:
             headers["Authorization"] = f"Bearer {self.config.api_key}"
         return headers
-    
+
     def _request(self, method: str, path: str, data: Optional[Dict] = None) -> Dict:
         """发送请求"""
         url = f"{self.config.api_url}{path}"
@@ -89,16 +90,16 @@ class AgentWatch:
                 resp = self._client.delete(url, headers=self._get_headers())
             else:
                 raise ValueError(f"Unknown method: {method}")
-            
+
             resp.raise_for_status()
             return resp.json()
         except httpx.HTTPError as e:
             return {"error": str(e), "status": "failed"}
-    
+
     def health_check(self) -> Dict:
         """健康检查"""
         return self._request("GET", "/health")
-    
+
     def create_trace(
         self,
         agent_id: str,
@@ -121,12 +122,12 @@ class AgentWatch:
             "prompt": prompt,
             "metadata": metadata or {},
         }
-        
+
         result = self._request("POST", "/api/v1/trace", data)
-        
+
         if "error" in result:
             raise Exception(f"Failed to create trace: {result['error']}")
-        
+
         trace = TraceContext(
             trace_id=result["trace_id"],
             agent_id=agent_id,
@@ -135,14 +136,14 @@ class AgentWatch:
             model=model,
             client=self,
         )
-        
+
         self._active_traces[trace.trace_id] = trace
         return trace
-    
+
     def get_trace(self, trace_id: str) -> Dict:
         """获取 Trace 详情"""
         return self._request("GET", f"/api/v1/trace/{trace_id}")
-    
+
     def list_traces(
         self,
         page: int = 1,
@@ -159,21 +160,21 @@ class AgentWatch:
             params["provider"] = provider
         if status:
             params["status"] = status
-        
+
         path = "/api/v1/traces?" + "&".join(f"{k}={v}" for k, v in params.items())
         return self._request("GET", path)
-    
+
     def get_stats(self) -> Dict:
         """获取统计信息"""
         return self._request("GET", "/stats")
-    
+
     def get_cost_summary(self, provider: Optional[str] = None) -> Dict:
         """获取成本汇总"""
         path = "/api/v1/cost/summary"
         if provider:
             path += f"?provider={provider}"
         return self._request("GET", path)
-    
+
     def trace(
         self,
         agent_name: str,
@@ -184,14 +185,14 @@ class AgentWatch:
     ) -> "TraceContext":
         """
         上下文管理器 - 自动追踪
-        
+
         使用示例:
             with aw.trace("my_agent", model="gpt-4o") as t:
                 result = llm_call()
                 t.log_tokens(input=100, output=200)
         """
         agent_id = agent_id or f"agent_{uuid.uuid4().hex[:8]}"
-        
+
         trace = self.create_trace(
             agent_id=agent_id,
             agent_name=agent_name,
@@ -199,16 +200,16 @@ class AgentWatch:
             model=model,
             **kwargs,
         )
-        
+
         return trace
-    
+
     def close(self):
         """关闭客户端"""
         self._client.close()
-    
+
     def __enter__(self):
         return self
-    
+
     def __exit__(self, *args):
         self.close()
 
@@ -216,10 +217,10 @@ class AgentWatch:
 class TraceContext:
     """
     Trace 上下文管理器
-    
+
     自动管理 trace 的生命周期
     """
-    
+
     def __init__(
         self,
         trace_id: str,
@@ -235,13 +236,13 @@ class TraceContext:
         self.provider = provider
         self.model = model
         self._client = client
-        
+
         self._start_time = time.time()
         self._events: list = []
         self._total_input_tokens = 0
         self._total_output_tokens = 0
         self._status = "running"
-    
+
     def add_event(
         self,
         event_type: str,
@@ -254,10 +255,10 @@ class TraceContext:
         """添加事件"""
         event_id = f"ev_{uuid.uuid4().hex[:8]}"
         latency = latency_ms or int((time.time() - self._start_time) * 1000)
-        
+
         self._total_input_tokens += input_tokens
         self._total_output_tokens += output_tokens
-        
+
         event = {
             "event_id": event_id,
             "event_type": event_type,
@@ -268,14 +269,14 @@ class TraceContext:
             "content": content,
             "metadata": metadata or {},
         }
-        
+
         result = self._client._request(
             "POST", f"/api/v1/trace/{self.trace_id}/event", event
         )
-        
+
         self._events.append(event)
         return result
-    
+
     def log_tokens(self, input: int, output: int, event_type: str = "response"):
         """快速记录 tokens"""
         return self.add_event(
@@ -283,27 +284,27 @@ class TraceContext:
             input_tokens=input,
             output_tokens=output,
         )
-    
+
     def log_error(self, error_message: str):
         """记录错误"""
         self.add_event(event_type="error", content=error_message)
         self._status = "failed"
-    
+
     def complete(self):
         """完成 trace"""
         duration_ms = int((time.time() - self._start_time) * 1000)
-        
+
         data = {
             "status": "failed" if self._status == "failed" else "completed",
             "duration_ms": duration_ms,
         }
-        
+
         self._client._request("PUT", f"/api/v1/trace/{self.trace_id}", data)
         self._status = "completed"
-    
+
     def __enter__(self):
         return self
-    
+
     def __exit__(self, exc_type, exc_val, exc_tb):
         if exc_type:
             self.log_error(str(exc_val))

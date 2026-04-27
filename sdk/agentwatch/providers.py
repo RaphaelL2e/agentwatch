@@ -10,10 +10,11 @@ from dataclasses import dataclass
 @dataclass
 class TokenUsage:
     """Token 使用量"""
+
     input_tokens: int
     output_tokens: int
     total_tokens: int
-    
+
     @classmethod
     def from_openai(cls, response: Any) -> "TokenUsage":
         """从 OpenAI 响应提取"""
@@ -23,7 +24,7 @@ class TokenUsage:
             output_tokens=usage.completion_tokens,
             total_tokens=usage.total_tokens,
         )
-    
+
     @classmethod
     def from_anthropic(cls, response: Any) -> "TokenUsage":
         """从 Anthropic 响应提取"""
@@ -33,7 +34,7 @@ class TokenUsage:
             output_tokens=usage.output_tokens,
             total_tokens=usage.input_tokens + usage.output_tokens,
         )
-    
+
     @classmethod
     def from_dict(cls, data: Dict) -> "TokenUsage":
         """从字典提取"""
@@ -82,53 +83,53 @@ def calculate_cost(
 ) -> float:
     """
     计算 Token 成本
-    
+
     Args:
         provider: 提供商名称
         model: 模型名称
         input_tokens: 输入 tokens
         output_tokens: 输出 tokens
-    
+
     Returns:
         成本 (USD)
     """
     provider_lower = provider.lower()
     model_lower = model.lower()
-    
+
     # 查找成本配置
     provider_costs = PROVIDER_COSTS.get(provider_lower, {})
-    
+
     # 尝试匹配模型
     model_costs = None
     for model_key, costs in provider_costs.items():
         if model_key in model_lower or model_lower in model_key:
             model_costs = costs
             break
-    
+
     # 使用默认成本
     if not model_costs:
         model_costs = {"input": 0.001, "output": 0.002}
-    
+
     # 计算成本
     input_cost = (input_tokens / 1000) * model_costs["input"]
     output_cost = (output_tokens / 1000) * model_costs["output"]
-    
+
     return input_cost + output_cost
 
 
 def extract_tokens(response: Any, provider: str) -> TokenUsage:
     """
     从响应中提取 Token 使用量
-    
+
     Args:
         response: AI 提供商的响应对象
         provider: 提供商名称
-    
+
     Returns:
         TokenUsage 对象
     """
     provider_lower = provider.lower()
-    
+
     if provider_lower == "openai":
         return TokenUsage.from_openai(response)
     elif provider_lower == "anthropic":
@@ -145,16 +146,16 @@ def extract_tokens(response: Any, provider: str) -> TokenUsage:
 class ProviderAdapter:
     """
     Provider适配器基类
-    
+
     用于适配不同的 AI 提供商
     """
-    
+
     provider_name: str = "unknown"
-    
+
     def extract_tokens(self, response: Any) -> TokenUsage:
         """提取 tokens"""
         raise NotImplementedError
-    
+
     def calculate_cost(self, model: str, tokens: TokenUsage) -> float:
         """计算成本"""
         return calculate_cost(
@@ -167,27 +168,27 @@ class ProviderAdapter:
 
 class OpenAIAdapter(ProviderAdapter):
     """OpenAI 适配器"""
-    
+
     provider_name = "openai"
-    
+
     def extract_tokens(self, response: Any) -> TokenUsage:
         return TokenUsage.from_openai(response)
 
 
 class AnthropicAdapter(ProviderAdapter):
     """Anthropic 适配器"""
-    
+
     provider_name = "anthropic"
-    
+
     def extract_tokens(self, response: Any) -> TokenUsage:
         return TokenUsage.from_anthropic(response)
 
 
 class DeepSeekAdapter(ProviderAdapter):
     """DeepSeek 适配器"""
-    
+
     provider_name = "deepseek"
-    
+
     def extract_tokens(self, response: Any) -> TokenUsage:
         # DeepSeek 使用 OpenAI 格式
         if hasattr(response, "usage"):
@@ -197,9 +198,9 @@ class DeepSeekAdapter(ProviderAdapter):
 
 class GoogleAdapter(ProviderAdapter):
     """Google Gemini 适配器"""
-    
+
     provider_name = "google"
-    
+
     def extract_tokens(self, response: Any) -> TokenUsage:
         # Gemini 使用不同格式
         if hasattr(response, "usage_metadata"):

@@ -11,8 +11,15 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
 from models import (
-    TraceCreate, TraceUpdate, TraceResponse, TraceListResponse,
-    TraceEvent, CostSummary, HealthCheck, TraceStatus, AgentProvider
+    TraceCreate,
+    TraceUpdate,
+    TraceResponse,
+    TraceListResponse,
+    TraceEvent,
+    CostSummary,
+    HealthCheck,
+    TraceStatus,
+    AgentProvider,
 )
 from trace_service import TraceService
 
@@ -39,6 +46,7 @@ app.add_middleware(
 
 # ==================== 基础端点 ====================
 
+
 @app.get("/", tags=["Root"])
 async def root():
     """API根路径"""
@@ -46,7 +54,7 @@ async def root():
         "message": "AgentWatch API",
         "version": "0.2.0",
         "docs": "/docs",
-        "status": "running"
+        "status": "running",
     }
 
 
@@ -59,7 +67,7 @@ async def health():
         version="0.2.0",
         uptime_seconds=time.time() - START_TIME,
         database_connected=True,  # 内存存储总是连接
-        traces_count=stats["total_traces"]
+        traces_count=stats["total_traces"],
     )
 
 
@@ -71,11 +79,12 @@ async def get_stats():
 
 # ==================== Trace API ====================
 
+
 @app.post("/api/v1/trace", response_model=TraceResponse, tags=["Trace"])
 async def create_trace(trace_data: TraceCreate):
     """
     创建新的 Trace
-    
+
     - **agent_id**: Agent唯一标识
     - **agent_name**: Agent名称
     - **provider**: AI提供商 (openai, anthropic, deepseek, google)
@@ -114,7 +123,9 @@ async def delete_trace(trace_id: str):
     return {"message": f"Trace {trace_id} deleted", "success": True}
 
 
-@app.post("/api/v1/trace/{trace_id}/event", response_model=TraceResponse, tags=["Trace"])
+@app.post(
+    "/api/v1/trace/{trace_id}/event", response_model=TraceResponse, tags=["Trace"]
+)
 async def add_trace_event(trace_id: str, event: TraceEvent):
     """添加事件到 Trace"""
     trace = TraceService.add_event(trace_id, event)
@@ -135,7 +146,7 @@ async def list_traces(
 ):
     """
     列出 Traces
-    
+
     支持多种过滤条件：
     - 按Agent ID
     - 按提供商
@@ -155,6 +166,7 @@ async def list_traces(
 
 # ==================== Cost API ====================
 
+
 @app.get("/api/v1/cost/summary", response_model=list[CostSummary], tags=["Cost"])
 async def get_cost_summary(
     provider: Optional[str] = Query(None, description="提供商过滤"),
@@ -163,7 +175,7 @@ async def get_cost_summary(
 ):
     """
     获取成本汇总
-    
+
     返回按 provider + model 分组的成本统计
     """
     return TraceService.get_cost_summary(
@@ -181,11 +193,12 @@ async def get_model_costs():
 
 # ==================== Dashboard API ====================
 
+
 @app.get("/api/v1/dashboard", tags=["Dashboard"])
 async def get_dashboard():
     """
     获取 Dashboard 概览数据
-    
+
     返回:
     - total_traces: 总 trace 数
     - running_traces: 运行中 trace 数
@@ -197,18 +210,18 @@ async def get_dashboard():
     - model_distribution: Model 分布
     """
     stats = TraceService.get_stats()
-    
+
     # Provider 和 Model 分布
     provider_dist = {}
     model_dist = {}
-    
+
     for trace in TraceService.list_traces(page=1, page_size=1000).traces:
         provider = str(trace.provider)
         model = trace.model
-        
+
         provider_dist[provider] = provider_dist.get(provider, 0) + 1
         model_dist[model] = model_dist.get(model, 0) + 1
-    
+
     return {
         "total_traces": stats["total_traces"],
         "running_traces": stats["running_traces"],
@@ -223,6 +236,7 @@ async def get_dashboard():
 
 # ==================== 测试端点 ====================
 
+
 @app.post("/api/v1/test/trace", response_model=TraceResponse, tags=["Test"])
 async def create_test_trace():
     """创建测试 Trace（用于快速测试）"""
@@ -236,7 +250,7 @@ async def create_test_trace():
         prompt="Hello, this is a test trace",
     )
     trace = TraceService.create_trace(trace_data)
-    
+
     # 添加测试事件
     event1 = TraceEvent(
         event_id="ev_001",
@@ -256,15 +270,16 @@ async def create_test_trace():
         latency_ms=800,
         content="AI response received",
     )
-    
+
     TraceService.add_event(trace.trace_id, event1)
     TraceService.add_event(trace.trace_id, event2)
     TraceService.update_trace(trace.trace_id, TraceUpdate(status=TraceStatus.COMPLETED))
-    
+
     return TraceService.get_trace(trace.trace_id)
 
 
 # ==================== 启动事件 ====================
+
 
 @app.on_event("startup")
 async def startup_event():
@@ -283,4 +298,5 @@ async def shutdown_event():
 # 开发运行: uvicorn main:app --reload --port 8000
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)

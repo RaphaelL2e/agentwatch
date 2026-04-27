@@ -17,16 +17,16 @@ def trace_agent(
 ):
     """
     装饰器 - 自动追踪 Agent 函数
-    
+
     使用示例:
         @trace_agent("my_agent", model="gpt-4o")
         def my_llm_function(prompt: str):
             response = openai.chat.completions.create(...)
             return response
-        
+
         # 自动追踪每次调用
         result = my_llm_function("Hello")
-    
+
     Args:
         agent_name: Agent 名称
         model: 使用的模型
@@ -34,12 +34,13 @@ def trace_agent(
         api_url: AgentWatch API 地址
         trace_kwargs: 其他 trace 参数
     """
+
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
         def wrapper(*args, **kwargs) -> Any:
             # 创建 AgentWatch 客户端
             aw = AgentWatch(api_url=api_url)
-            
+
             try:
                 # 创建 trace
                 trace = aw.create_trace(
@@ -49,10 +50,10 @@ def trace_agent(
                     model=model,
                     **trace_kwargs,
                 )
-                
+
                 # 执行函数
                 result = func(*args, **kwargs)
-                
+
                 # 尝试从结果中提取 tokens
                 if hasattr(result, "usage"):
                     trace.log_tokens(
@@ -65,20 +66,20 @@ def trace_agent(
                         input=usage.get("prompt_tokens", 0),
                         output=usage.get("completion_tokens", 0),
                     )
-                
+
                 trace.complete()
                 return result
-                
+
             except Exception as e:
                 if "trace" in locals():
                     trace.log_error(str(e))
                 raise
-            
+
             finally:
                 aw.close()
-        
+
         return wrapper
-    
+
     return decorator
 
 
@@ -89,7 +90,7 @@ def trace_openai_call(
 ):
     """
     装饰器 - 专门追踪 OpenAI 调用
-    
+
     使用示例:
         @trace_openai_call(model="gpt-4o-mini")
         def call_gpt(prompt: str):
@@ -108,7 +109,7 @@ def trace_anthropic_call(
 ):
     """
     装饰器 - 专门追踪 Anthropic 调用
-    
+
     使用示例:
         @trace_anthropic_call(model="claude-3-haiku")
         def call_claude(prompt: str):
@@ -135,16 +136,16 @@ def trace_deepseek_call(
 class TracedAgent:
     """
     追踪的 Agent 类
-    
+
     使用示例:
         class MyAgent(TracedAgent):
             def run(self, prompt: str):
                 return self.llm_call(prompt)
-        
+
         agent = MyAgent(name="my_agent", model="gpt-4o")
         result = agent.run("Hello")  # 自动追踪
     """
-    
+
     def __init__(
         self,
         name: str,
@@ -157,7 +158,7 @@ class TracedAgent:
         self.provider = provider
         self._aw = AgentWatch(api_url=api_url)
         self._trace: Optional[TraceContext] = None
-    
+
     def start_trace(self, prompt: Optional[str] = None):
         """开始追踪"""
         self._trace = self._aw.create_trace(
@@ -167,23 +168,23 @@ class TracedAgent:
             model=self.model,
             prompt=prompt,
         )
-    
+
     def log_tokens(self, input: int, output: int):
         """记录 tokens"""
         if self._trace:
             self._trace.log_tokens(input=input, output=output)
-    
+
     def log_error(self, error: str):
         """记录错误"""
         if self._trace:
             self._trace.log_error(error)
-    
+
     def end_trace(self):
         """结束追踪"""
         if self._trace:
             self._trace.complete()
             self._trace = None
-    
+
     def close(self):
         """关闭"""
         self._aw.close()

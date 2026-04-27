@@ -5,7 +5,8 @@ AgentWatch Backend Tests
 import pytest
 from fastapi.testclient import TestClient
 import sys
-sys.path.insert(0, '.')
+
+sys.path.insert(0, ".")
 
 from main import app
 
@@ -33,13 +34,16 @@ def test_stats():
 
 def test_create_trace():
     """测试创建 Trace"""
-    response = client.post("/api/v1/trace", json={
-        "agent_id": "test-agent",
-        "agent_name": "TestAgent",
-        "provider": "openai",
-        "model": "gpt-4o-mini",
-        "prompt": "Hello"
-    })
+    response = client.post(
+        "/api/v1/trace",
+        json={
+            "agent_id": "test-agent",
+            "agent_name": "TestAgent",
+            "provider": "openai",
+            "model": "gpt-4o-mini",
+            "prompt": "Hello",
+        },
+    )
     assert response.status_code == 200
     data = response.json()
     assert "trace_id" in data
@@ -49,14 +53,17 @@ def test_create_trace():
 def test_get_trace():
     """测试获取 Trace"""
     # 先创建一个 trace
-    create_response = client.post("/api/v1/trace", json={
-        "agent_id": "test-agent-2",
-        "agent_name": "TestAgent2",
-        "provider": "openai",
-        "model": "gpt-4o-mini",
-    })
+    create_response = client.post(
+        "/api/v1/trace",
+        json={
+            "agent_id": "test-agent-2",
+            "agent_name": "TestAgent2",
+            "provider": "openai",
+            "model": "gpt-4o-mini",
+        },
+    )
     trace_id = create_response.json()["trace_id"]
-    
+
     # 然后获取它
     response = client.get(f"/api/v1/trace/{trace_id}")
     assert response.status_code == 200

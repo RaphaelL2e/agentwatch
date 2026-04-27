@@ -11,6 +11,7 @@ from enum import Enum
 
 class TraceStatus(str, Enum):
     """Trace 状态枚举"""
+
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
@@ -19,6 +20,7 @@ class TraceStatus(str, Enum):
 
 class AgentProvider(str, Enum):
     """Agent 提供商枚举"""
+
     OPENAI = "openai"
     ANTHROPIC = "anthropic"
     DEEPSEEK = "deepseek"
@@ -28,9 +30,12 @@ class AgentProvider(str, Enum):
 
 class TraceEvent(BaseModel):
     """单个 Trace 事件"""
+
     event_id: str = Field(..., description="事件ID")
     timestamp: datetime = Field(default_factory=datetime.utcnow)
-    event_type: str = Field(..., description="事件类型: call, response, error, tool_use")
+    event_type: str = Field(
+        ..., description="事件类型: call, response, error, tool_use"
+    )
     agent_name: Optional[str] = Field(None, description="Agent名称")
     model: Optional[str] = Field(None, description="使用的模型")
     input_tokens: int = Field(default=0, ge=0)
@@ -42,6 +47,7 @@ class TraceEvent(BaseModel):
 
 class TraceCreate(BaseModel):
     """创建 Trace 请求"""
+
     trace_id: Optional[str] = Field(None, description="Trace ID，不提供则自动生成")
     agent_id: str = Field(..., description="Agent ID")
     agent_name: str = Field(..., description="Agent 名称")
@@ -55,6 +61,7 @@ class TraceCreate(BaseModel):
 
 class TraceUpdate(BaseModel):
     """更新 Trace 请求"""
+
     status: Optional[TraceStatus] = None
     events: Optional[List[TraceEvent]] = None
     total_tokens: Optional[int] = None
@@ -66,6 +73,7 @@ class TraceUpdate(BaseModel):
 
 class TraceResponse(BaseModel):
     """Trace 响应"""
+
     trace_id: str
     agent_id: str
     agent_name: str
@@ -90,6 +98,7 @@ class TraceResponse(BaseModel):
 
 class TraceListResponse(BaseModel):
     """Trace 列表响应"""
+
     traces: List[TraceResponse]
     total: int
     page: int
@@ -99,6 +108,7 @@ class TraceListResponse(BaseModel):
 
 class CostSummary(BaseModel):
     """成本汇总"""
+
     provider: AgentProvider
     model: str
     total_traces: int
@@ -111,6 +121,7 @@ class CostSummary(BaseModel):
 
 class HealthCheck(BaseModel):
     """健康检查响应"""
+
     status: str
     version: str
     uptime_seconds: float
