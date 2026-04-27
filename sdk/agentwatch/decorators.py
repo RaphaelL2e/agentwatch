@@ -6,7 +6,8 @@ AgentWatch SDK 装饰器
 import functools
 import asyncio
 import json
-from typing import Optional, Callable, Any, AsyncIterator, Iterator, Union
+import time
+from typing import Optional, Callable, Any, AsyncIterator, Iterator, Union, List, Tuple
 from .client import AgentWatch, TraceContext
 
 
@@ -517,4 +518,291 @@ async def async_quick_trace(
         )
     """
     decorated = trace_agent(agent_name, model, provider, api_url)(func)
-    return await decorated(*args, **kwargs)
+
+
+# ==================== 重试装饰器 ====================
+
+
+def with_retry(
+    max_attempts: int = 3,
+    delay: float = 1.0,
+    backoff: float = 2.0,
+    retry_on: tuple = (Exception,),
+    on_retry: Optional[Callable[[int, Exception], None]] = None,
+):
+    """
+    重试装饰器 - 自动重试失败的 LLM 调用
+    
+    使用示例:
+        @with_retry(max_attempts=3, delay=1.0)
+        @trace_agent("my_agent", model="gpt-4o")
+        def call_gpt(prompt: str):
+            return openai.chat.completions.create(...)
+        
+        # 失败会自动重试3次，每次延迟增加
+        result = call_gpt("Hello")
+    
+    Args:
+        max_attempts: 最大重试次数
+        delay: 初始延迟（秒）
+        backoff: 延迟增长因子
+        retry_on: 需要重试的异常类型
+        on_retry: 重试回调函数，接收 (attempt, exception)
+    """
+    
+    def decorator(func: Callable) -> Callable:
+        is_async = asyncio.iscoroutinefunction(func)
+        
+        if is_async:
+            @functools.wraps(func)
+            async def async_wrapper(*args, **kwargs) -> Any:
+                current_delay = delay
+                for attempt in range(max_attempts):
+                    try:
+                        return await func(*args, **kwargs)
+                    except retry_on as e:
+                        if attempt == max_attempts - 1:
+                            raise
+                        
+                        if on_retry:
+                            on_retry(attempt + 1, e)
+                        
+                        await asyncio.sleep(current_delay)
+                        current_delay *= backoff
+                        
+            return async_wrapper
+        else:
+            @functools.wraps(func)
+            def sync_wrapper(*args, **kwargs) -> Any:
+                import time
+                current_delay = delay
+                
+                for attempt in range(max_attempts):
+                    try:
+                        return func(*args, **kwargs)
+                    except retry_on as e:
+                        if attempt == max_attempts - 1:
+                            raise
+                        
+                        if on_retry:
+                            on_retry(attempt + 1, e)
+                        
+                        time.sleep(current_delay)
+                        current_delay *= backoff
+                        
+            return sync_wrapper
+    
+    return decorator
+
+
+# ==================== 速率限制装饰器 ====================
+
+
+class RateLimiter:
+    """
+    速率限制器
+    
+    用于限制 API 调用频率，防止超过 provider 的速率限制
+    """
+    
+    def __init__(
+        self,
+        calls_per_minute: int = 60,
+        calls_per_second: int = 10,
+    ):
+        self.calls_per_minute = calls_per_minute
+        self.calls_per_second = calls_per_second
+        self._minute_calls: List[float] = []
+        self._second_calls: List[float] = []
+        self._lock = asyncio.Lock() if asyncio.get_event_loop().is_running() else None
+    
+    def _clean_old_calls(self, calls: List[float], window: float) -> List[float]:
+        """清理超出时间窗口的调用记录"""
+        import time
+        now = time.time()
+        return [t for t in calls if now - t < window]
+    
+    async def _wait_async(self) -> None:
+        """异步等待直到可以调用"""
+        import time
+        
+        async with self._lock:
+            now = time.time()
+            
+            # 清理旧调用记录
+            self._minute_calls = self._clean_old_calls(self._minute_calls, 60)
+            self._second_calls = self._clean_old_calls(self._second_calls, 1)
+            
+            # 检查分钟限制
+            if len(self._minute_calls) >= self.calls_per_minute:
+                wait_time = 60 - (now - self._minute_calls[0]) + 0.1
+                await asyncio.sleep(wait_time)
+                self._minute_calls = self._clean_old_calls(self._minute_calls, 60)
+            
+            # 检查秒限制
+            if len(self._second_calls) >= self.calls_per_second:
+                wait_time = 1 - (now - self._second_calls[0]) + 0.1
+                await asyncio.sleep(wait_time)
+                self._second_calls = self._clean_old_calls(self._second_calls, 1)
+            
+            # 记录本次调用
+            self._minute_calls.append(time.time())
+            self._second_calls.append(time.time())
+    
+    def _wait_sync(self) -> None:
+        """同步等待直到可以调用"""
+        import time
+        
+        now = time.time()
+        
+        # 清理旧调用记录
+        self._minute_calls = self._clean_old_calls(self._minute_calls, 60)
+        self._second_calls = self._clean_old_calls(self._second_calls, 1)
+        
+        # 检查分钟限制
+        if len(self._minute_calls) >= self.calls_per_minute:
+            wait_time = 60 - (now - self._minute_calls[0]) + 0.1
+            time.sleep(wait_time)
+            self._minute_calls = self._clean_old_calls(self._minute_calls, 60)
+        
+        # 检查秒限制
+        if len(self._second_calls) >= self.calls_per_second:
+            wait_time = 1 - (now - self._second_calls[0]) + 0.1
+            time.sleep(wait_time)
+            self._second_calls = self._clean_old_calls(self._second_calls, 1)
+        
+        # 记录本次调用
+        self._minute_calls.append(time.time())
+        self._second_calls.append(time.time())
+
+
+def with_rate_limit(
+    calls_per_minute: int = 60,
+    calls_per_second: int = 10,
+):
+    """
+    速率限制装饰器 - 自动限制 API 调用频率
+    
+    使用示例:
+        @with_rate_limit(calls_per_minute=60, calls_per_second=10)
+        @trace_agent("my_agent", model="gpt-4o")
+        def call_gpt(prompt: str):
+            return openai.chat.completions.create(...)
+        
+        # 超过速率限制会自动等待
+        for i in range(100):
+            result = call_gpt(f"Prompt {i}")  # 自动速率控制
+    
+    Args:
+        calls_per_minute: 每分钟最大调用次数
+        calls_per_second: 每秒最大调用次数
+    """
+    
+    limiter = RateLimiter(calls_per_minute, calls_per_second)
+    
+    def decorator(func: Callable) -> Callable:
+        is_async = asyncio.iscoroutinefunction(func)
+        
+        if is_async:
+            @functools.wraps(func)
+            async def async_wrapper(*args, **kwargs) -> Any:
+                await limiter._wait_async()
+                return await func(*args, **kwargs)
+            
+            return async_wrapper
+        else:
+            @functools.wraps(func)
+            def sync_wrapper(*args, **kwargs) -> Any:
+                limiter._wait_sync()
+                return func(*args, **kwargs)
+            
+            return sync_wrapper
+    
+    return decorator
+
+
+# ==================== 组合装饰器 ====================
+
+
+def traced_llm_call(
+    agent_name: str,
+    model: str,
+    provider: str = "openai",
+    api_url: Optional[str] = None,
+    max_retry: int = 3,
+    retry_delay: float = 1.0,
+    rate_limit_per_minute: int = 60,
+    rate_limit_per_second: int = 10,
+    **trace_kwargs,
+):
+    """
+    组合装饰器 - 同时应用追踪、重试和速率限制
+    
+    使用示例:
+        @traced_llm_call(
+            "my_agent",
+            model="gpt-4o",
+            max_retry=3,
+            rate_limit_per_minute=60,
+        )
+        def call_gpt(prompt: str):
+            return openai.chat.completions.create(...)
+        
+        # 自动追踪、重试和速率控制
+        result = call_gpt("Hello")
+    
+    Args:
+        agent_name: Agent 名称
+        model: 使用的模型
+        provider: 提供商
+        api_url: AgentWatch API 地址
+        max_retry: 最大重试次数
+        retry_delay: 重试初始延迟
+        rate_limit_per_minute: 每分钟最大调用次数
+        rate_limit_per_second: 每秒最大调用次数
+        trace_kwargs: 其他 trace 参数
+    """
+    
+    def decorator(func: Callable) -> Callable:
+        # 应用装饰器顺序: trace -> rate_limit -> retry
+        # 这样 retry 在最外层，失败会重试整个流程
+        decorated = trace_agent(
+            agent_name, model, provider, api_url, **trace_kwargs
+        )(func)
+        
+        if rate_limit_per_minute or rate_limit_per_second:
+            decorated = with_rate_limit(
+                calls_per_minute=rate_limit_per_minute,
+                calls_per_second=rate_limit_per_second,
+            )(decorated)
+        
+        if max_retry > 1:
+            decorated = with_retry(
+                max_attempts=max_retry,
+                delay=retry_delay,
+            )(decorated)
+        
+        return decorated
+    
+    return decorator
+
+
+# ==================== 导出所有装饰器 ====================
+
+__all__ = [
+    "trace_agent",
+    "trace_openai_call",
+    "trace_anthropic_call",
+    "trace_deepseek_call",
+    "trace_gemini_call",
+    "trace_streaming",
+    "StreamingTraceWrapper",
+    "TracedAgent",
+    "AsyncTracedAgent",
+    "quick_trace",
+    "async_quick_trace",
+    "with_retry",
+    "with_rate_limit",
+    "RateLimiter",
+    "traced_llm_call",
+]

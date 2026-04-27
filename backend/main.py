@@ -326,8 +326,8 @@ async def get_dashboard():
         model_dist[model] = model_dist.get(model, 0) + 1
         
         # 收集延迟数据
-        if trace.latency_ms:
-            latencies.append(trace.latency_ms)
+        if trace.duration_ms:
+            latencies.append(trace.duration_ms)
 
     # 计算延迟分布
     latency_distribution = {}
@@ -442,16 +442,16 @@ async def get_provider_analytics():
         stats = provider_stats[provider]
         
         stats["traces"] += 1
-        stats["total_cost"] += trace.cost or 0
-        stats["total_input_tokens"] += trace.input_tokens or 0
-        stats["total_output_tokens"] += trace.output_tokens or 0
-        stats["total_tokens"] += (trace.input_tokens or 0) + (trace.output_tokens or 0)
+        stats["total_cost"] += trace.total_cost or 0
+        stats["total_input_tokens"] += trace.total_input_tokens or 0
+        stats["total_output_tokens"] += trace.total_output_tokens or 0
+        stats["total_tokens"] += (trace.total_input_tokens or 0) + (trace.total_output_tokens or 0)
         
         if trace.model:
             stats["models"].add(trace.model)
         
-        if trace.latency_ms:
-            stats["latencies"].append(trace.latency_ms)
+        if trace.duration_ms:
+            stats["latencies"].append(trace.duration_ms)
         
         if trace.status == "completed":
             stats["success_count"] += 1

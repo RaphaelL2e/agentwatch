@@ -149,6 +149,11 @@
 - **2026-04-27**: SDK完整示例完成（complete_demo.py）
 - **2026-04-27**: 每4小时自动推进定时任务创建
 - **2026-04-27**: Week 1 MVP 100%完成 🎉🎉🎉
+- **2026-04-28**: WebSocket实时更新集成前端Dashboard
+- **2026-04-28**: 新增useWebSocket React Hook
+- **2026-04-28**: Backend测试扩展至33个（Dashboard/Analytics/WebSocket）
+- **2026-04-28**: SDK新增with_retry、with_rate_limit、traced_llm_call装饰器
+- **2026-04-28**: 修复Dashboard/API端点属性名称问题
 
 ---
 

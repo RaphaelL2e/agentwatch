@@ -1,7 +1,8 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { Activity, DollarSign, Clock, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react'
+import { Activity, DollarSign, Clock, AlertCircle, CheckCircle2, Loader2, Wifi, WifiOff } from 'lucide-react'
 import { api } from '../api'
+import { useRealTimeStats } from '../hooks/useWebSocket'
 
 // 统计卡片组件
 function StatCard({ title, value, icon, color }: { 
@@ -94,6 +95,11 @@ function TraceItem({ trace }: { trace: any }) {
 
 // Dashboard 主组件
 function Dashboard() {
+  const queryClient = useQueryClient()
+  
+  // WebSocket 实时更新
+  const { isConnected, connectionStatus } = useRealTimeStats(queryClient)
+  
   // 获取统计信息
   const { data: stats } = useQuery({
     queryKey: ['stats'],
@@ -111,6 +117,20 @@ function Dashboard() {
     queryKey: ['health'],
     queryFn: () => api.getHealth(),
   })
+  
+  // WebSocket 状态徽章
+  const WebSocketBadge = () => (
+    <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
+      isConnected
+        ? 'bg-green-500/20 text-green-500'
+        : connectionStatus === 'connecting'
+        ? 'bg-yellow-500/20 text-yellow-500'
+        : 'bg-red-500/20 text-red-500'
+    }`}>
+      {isConnected ? <Wifi className="w-3 h-3 mr-1" /> : <WifiOff className="w-3 h-3 mr-1" />}
+      {isConnected ? 'Live' : connectionStatus === 'connecting' ? 'Connecting...' : 'Offline'}
+    </span>
+  )
   
   return (
     <div className="space-y-6">
@@ -153,6 +173,7 @@ function Dashboard() {
             }`}>
               {health?.status === 'healthy' ? '●' : '○'} {health?.status || 'Unknown'}
             </span>
+            <WebSocketBadge />
           </div>
           <div className="text-slate-400 text-sm">
             Version: {health?.version || 'N/A'} | 
