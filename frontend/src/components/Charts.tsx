@@ -1,11 +1,13 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { api } from '../api';
+import { TrendingUp, Activity, Zap, PieChart as PieChartIcon } from 'lucide-react';
 
 interface ChartData {
   provider: string;
   cost: number;
   traces: number;
+  tokens: number;
   color: string;
 }
 
@@ -22,12 +24,156 @@ interface LatencyBucket {
   percentage: number;
 }
 
+// 简化的饼图组件
+function SimplePieChart({ data }: { data: ChartData[] }) {
+  if (data.length === 0) return null;
+  
+  const total = data.reduce((sum, d) => sum + d.tokens, 0);
+  let currentAngle = 0;
+  
+  return (
+    <div className="flex items-center gap-6">
+      <svg viewBox="0 0 100 100" className="w-32 h-32">
+        {data.map((item, index) => {
+          const percentage = (item.tokens / total) * 100;
+          const angle = (percentage / 100) * 360;
+          const startAngle = currentAngle;
+          currentAngle += angle;
+          
+          // Calculate path for pie slice
+          const startRad = (startAngle - 90) * Math.PI / 180;
+          const endRad = (currentAngle - 90) * Math.PI / 180;
+          const x1 = 50 + 40 * Math.cos(startRad);
+          const y1 = 50 + 40 * Math.sin(startRad);
+          const x2 = 50 + 40 * Math.cos(endRad);
+          const y2 = 50 + 40 * Math.sin(endRad);
+          const largeArc = angle > 180 ? 1 : 0;
+          
+          return (
+            <path
+              key={index}
+              d={`M 50 50 L ${x1} ${y1} A 40 40 0 ${largeArc} 1 ${x2} ${y2} Z`}
+              fill={item.color}
+              stroke="#1f2937"
+              strokeWidth="1"
+            />
+          );
+        })}
+        <circle cx="50" cy="50" r="20" fill="#1f2937" />
+        <text x="50" y="50" textAnchor="middle" fill="white" fontSize="8" dy="3">
+          {total.toLocaleString()}
+        </text>
+      </svg>
+      
+      <div className="space-y-2">
+        {data.map((item) => (
+          <div key={item.provider} className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded" style={{ backgroundColor: item.color }} />
+            <span className="text-sm text-gray-300">{item.provider}</span>
+            <span className="text-sm font-bold">{((item.tokens / total) * 100).toFixed(1)}%</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// 简化的折线图组件
+function SimpleLineChart({ data }: { data: TimelinePoint[] }) {
+  if (data.length === 0) return null;
+  
+  const maxCost = Math.max(...data.map(d => d.cost), 0.01);
+  const width = 100;
+  const height = 50;
+  
+  // Calculate points
+  const points = data.map((d, i) => {
+    const x = (i / (data.length - 1)) * width;
+    const y = height - (d.cost / maxCost) * (height - 10);
+    return `${x},${y}`;
+  }).join(' ');
+  
+  return (
+    <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-24">
+      <polyline
+        fill="none"
+        stroke="#3b82f6"
+        strokeWidth="2"
+        points={points}
+      />
+      {/* 添加网格线 */}
+      <line x1="0" y1="0" x2={width} y2="0" stroke="#374151" strokeWidth="0.5" />
+      <line x1="0" y1={height/2} x2={width} y2={height/2} stroke="#374151" strokeWidth="0.5" />
+      <line x1="0" y1={height} x2={width} y2={height} stroke="#374151" strokeWidth="0.5" />
+    </svg>
+  );
+}
+
+// 实时活动组件
+function ActivityFeed({ traces }: { traces: any[] }) {
+  return (
+    <div className="space-y-2 max-h-64 overflow-y-auto">
+      {traces.slice(0, 10).map((trace: any) => (
+        <div key={trace.trace_id} className="flex items-center gap-3 p-2 bg-gray-700/50 rounded text-sm">
+          <div className={`w-2 h-2 rounded-full ${
+            trace.status === 'completed' ? 'bg-green-500' :
+            trace.status === 'running' ? 'bg-yellow-500' :
+            trace.status === 'failed' ? 'bg-red-500' :
+            'bg-gray-500'
+          }`} />
+          <span className="text-gray-300 flex-1 truncate">{trace.agent_name}</span>
+          <span className="text-gray-400">{trace.provider}</span>
+          <span className="text-green-400">${trace.total_cost.toFixed(4)}</span>
+          <span className="text-gray-500 text-xs">
+            {new Date(trace.created_at).toLocaleTimeString()}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Token 使用热力图
+function TokenHeatmap({ timelineData }: { timelineData: TimelinePoint[] }) {
+  if (timelineData.length === 0) return null;
+  
+  const maxTokens = Math.max(...timelineData.map(d => d.tokens), 1);
+  
+  return (
+    <div className="grid grid-cols-12 gap-1">
+      {timelineData.slice(-12).map((point, i) => {
+        const intensity = point.tokens / maxTokens;
+        const bgColor = intensity > 0.8 ? 'bg-green-600' :
+                       intensity > 0.6 ? 'bg-green-500' :
+                       intensity > 0.4 ? 'bg-green-400' :
+                       intensity > 0.2 ? 'bg-green-300' :
+                       intensity > 0 ? 'bg-green-200' :
+                       'bg-gray-700';
+        return (
+          <div
+            key={i}
+            className={`h-8 ${bgColor} rounded flex items-center justify-center text-xs font-bold`}
+            title={`${point.time}: ${point.tokens} tokens`}
+          >
+            {point.tokens > 0 ? point.tokens : ''}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function Charts() {
   const [timeRange, setTimeRange] = useState(24);
   
   const { data: stats } = useQuery({
     queryKey: ['stats'],
     queryFn: () => api.getStats(),
+  });
+
+  const { data: traces } = useQuery({
+    queryKey: ['traces'],
+    queryFn: () => api.getTraces({ page_size: 50 }),
   });
 
   const { data: modelCosts } = useQuery({
@@ -50,14 +196,26 @@ export default function Charts() {
     queryFn: () => api.getProviderAnalytics(),
   });
 
-  // 准备图表数据
+  // 准备图表数据 - 添加 tokens
   const chartData: ChartData[] = stats?.by_provider
-    ? Object.entries(stats.by_provider).map(([provider, providerData], index) => ({
-        provider,
-        cost: (providerData as { cost: number }).cost,
-        traces: (providerData as { traces: number }).traces,
-        color: getColor(index),
-      }))
+    ? Object.entries(stats.by_provider).map(([provider, providerData], index) => {
+        const data = providerData as { 
+          cost: number; 
+          traces: number;
+          tokens?: number;
+          total_input_tokens?: number;
+          total_output_tokens?: number;
+        };
+        const tokens = data.tokens || 
+          (data.total_input_tokens || 0) + (data.total_output_tokens || 0) || 0;
+        return {
+          provider,
+          cost: data.cost,
+          traces: data.traces,
+          tokens,
+          color: getColor(index),
+        };
+      })
     : [];
 
   // 准备延迟分布数据
@@ -90,6 +248,77 @@ export default function Charts() {
             {hours < 24 ? `${hours}h` : `${hours / 24}d`}
           </button>
         ))}
+      </div>
+
+      {/* 新增：Token 分布饼图 */}
+      <div className="mb-8 p-6 bg-gray-800 rounded-lg">
+        <div className="flex items-center gap-2 mb-4">
+          <PieChartIcon className="w-5 h-5 text-blue-400" />
+          <h2 className="text-lg font-semibold">Token Distribution by Provider</h2>
+        </div>
+        
+        {chartData.length > 0 && chartData.some(d => d.tokens > 0) ? (
+          <SimplePieChart data={chartData.filter(d => d.tokens > 0)} />
+        ) : (
+          <p className="text-gray-400 text-center py-4">No token data available</p>
+        )}
+      </div>
+
+      {/* 新增：成本趋势折线图 */}
+      <div className="mb-8 p-6 bg-gray-800 rounded-lg">
+        <div className="flex items-center gap-2 mb-4">
+          <TrendingUp className="w-5 h-5 text-green-400" />
+          <h2 className="text-lg font-semibold">Cost Trend</h2>
+        </div>
+        
+        {timeline && timeline.data && timeline.data.length > 0 ? (
+          <>
+            <SimpleLineChart data={timeline.data} />
+            <div className="mt-2 text-sm text-gray-400 flex justify-between">
+              <span>Start: ${(timeline.data?.[0]?.cost || 0).toFixed(4)}</span>
+              <span>End: ${(timeline.data?.[timeline.data.length - 1]?.cost || 0).toFixed(4)}</span>
+              <span className="text-green-400">
+                Δ ${(timeline.data.reduce((sum, p) => sum + p.cost, 0)).toFixed(4)}
+              </span>
+            </div>
+          </>
+        ) : (
+          <p className="text-gray-400 text-center py-4">No cost trend data available</p>
+        )}
+      </div>
+
+      {/* 新增：实时活动 Feed */}
+      <div className="mb-8 p-6 bg-gray-800 rounded-lg">
+        <div className="flex items-center gap-2 mb-4">
+          <Activity className="w-5 h-5 text-purple-400" />
+          <h2 className="text-lg font-semibold">Recent Activity</h2>
+        </div>
+        
+        {traces?.traces?.length > 0 ? (
+          <ActivityFeed traces={traces.traces} />
+        ) : (
+          <p className="text-gray-400 text-center py-4">No recent activity</p>
+        )}
+      </div>
+
+      {/* 新增：Token 使用热力图 */}
+      <div className="mb-8 p-6 bg-gray-800 rounded-lg">
+        <div className="flex items-center gap-2 mb-4">
+          <Zap className="w-5 h-5 text-yellow-400" />
+          <h2 className="text-lg font-semibold">Token Usage Heatmap</h2>
+        </div>
+        
+        {timeline && timeline.data && timeline.data.length > 0 ? (
+          <>
+            <TokenHeatmap timelineData={timeline.data} />
+            <div className="mt-2 flex justify-between text-xs text-gray-400">
+              <span>12 periods ago</span>
+              <span>Now</span>
+            </div>
+          </>
+        ) : (
+          <p className="text-gray-400 text-center py-4">No heatmap data available</p>
+        )}
       </div>
 
       {/* 时间线图表 */}
