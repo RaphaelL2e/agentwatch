@@ -4,7 +4,9 @@
  */
 
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { AgentWatchWebSocket, WebSocketCallbacks } from './api'
+import { AgentWatchWebSocket } from '../api'
+
+// WebSocketCallbacks type is exported from api.ts for external use
 
 export interface UseWebSocketOptions {
   autoConnect?: boolean
