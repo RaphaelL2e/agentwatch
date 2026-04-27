@@ -95,7 +95,7 @@ function TraceItem({ trace }: { trace: any }) {
 // Dashboard 主组件
 function Dashboard() {
   // 获取统计信息
-  const { data: stats, isLoading: statsLoading } = useQuery({
+  const { data: stats } = useQuery({
     queryKey: ['stats'],
     queryFn: () => api.getStats(),
   })

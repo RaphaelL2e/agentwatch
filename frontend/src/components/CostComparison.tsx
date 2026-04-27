@@ -30,7 +30,8 @@ const PRICING_DATA = {
 
 // 成本对比页面
 function CostComparison() {
-  const { data: modelCosts, isLoading } = useQuery({
+  // 获取成本对比数据
+  const { data: modelCosts } = useQuery({
     queryKey: ['modelCosts'],
     queryFn: () => api.getModelCosts(),
   })
