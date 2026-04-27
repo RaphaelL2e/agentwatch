@@ -154,6 +154,7 @@
 - **2026-04-28**: Backend测试扩展至33个（Dashboard/Analytics/WebSocket）
 - **2026-04-28**: SDK新增with_retry、with_rate_limit、traced_llm_call装饰器
 - **2026-04-28**: 修复Dashboard/API端点属性名称问题
+- **2026-04-28**: CI全部通过 ✅
 
 ---
 
