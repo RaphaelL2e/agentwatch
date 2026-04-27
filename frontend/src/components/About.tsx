@@ -1,4 +1,4 @@
-import React from 'react';
+// About.tsx - No React imports needed (no hooks used)
 
 export default function About() {
   return (

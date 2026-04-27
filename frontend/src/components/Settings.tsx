@@ -1,7 +1,7 @@
-import React from 'react';
+import { useState, useEffect } from 'react';
 
 export default function Settings() {
-  const [settings, setSettings] = React.useState({
+  const [settings, setSettings] = useState({
     apiUrl: 'http://localhost:8000',
     refreshInterval: 5000,
     theme: 'dark',
@@ -13,7 +13,7 @@ export default function Settings() {
     alert('Settings saved!');
   };
 
-  React.useEffect(() => {
+  useEffect(() => {
     const saved = localStorage.getItem('agentwatch_settings');
     if (saved) {
       setSettings(JSON.parse(saved));
