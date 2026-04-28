@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import Dashboard from './components/Dashboard'
 import TraceDetail from './components/TraceDetail'
 import CostComparison from './components/CostComparison'
+import CostOptimization from './components/CostOptimization'
 import Settings from './components/Settings'
 import About from './components/About'
 import Charts from './components/Charts'
@@ -47,6 +48,18 @@ function App() {
                     Cost Comparison
                   </a>
                   <a 
+                    href="/optimize" 
+                    className="text-slate-400 hover:text-white transition-colors text-sm"
+                  >
+                    Cost Optimization
+                  </a>
+                  <a 
+                    href="/charts" 
+                    className="text-slate-400 hover:text-white transition-colors text-sm"
+                  >
+                    Charts
+                  </a>
+                  <a 
                     href="/settings" 
                     className="text-slate-400 hover:text-white transition-colors text-sm"
                   >
@@ -58,12 +71,6 @@ function App() {
                   >
                     About
                   </a>
-                  <a 
-                    href="/charts" 
-                    className="text-slate-400 hover:text-white transition-colors text-sm"
-                  >
-                    Charts
-                  </a>
                 </nav>
               </div>
             </div>
@@ -74,6 +81,7 @@ function App() {
               <Route path="/" element={<Dashboard />} />
               <Route path="/trace/:traceId" element={<TraceDetail />} />
               <Route path="/costs" element={<CostComparison />} />
+              <Route path="/optimize" element={<CostOptimization />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/about" element={<About />} />
               <Route path="/charts" element={<Charts />} />

@@ -1013,6 +1013,260 @@ def with_cache(
     return decorator
 
 
+# ==================== Fallback 装饰器 ====================
+
+
+class FallbackError(Exception):
+    """所有 fallback 尝试都失败时的异常"""
+    pass
+
+
+def with_fallback(
+    fallbacks: List[Tuple[str, str, Callable]] = None,
+    on_all_fail: Optional[Callable[[List[Exception]], Any]] = None,
+):
+    """
+    Fallback 装饰器 - 自动切换到备用 provider/model 当主调用失败
+    
+    使用示例:
+        # 定义 fallback 链
+        @with_fallback([
+            ("deepseek", "deepseek-chat", deepseek_call),
+            ("anthropic", "claude-3-haiku", claude_call),
+        ])
+        def call_gpt(prompt: str):
+            return openai.chat.completions.create(
+                model="gpt-4o",
+                messages=[{"role": "user", "content": prompt}]
+            )
+        
+        # 如果 OpenAI 失败，自动尝试 DeepSeek，然后 Claude
+        result = call_gpt("Hello")
+        
+        # 设置 fallback 处理函数
+        def handle_all_fail(errors):
+            return {"error": "All providers failed", "details": [str(e) for e in errors]}
+        
+        @with_fallback(
+            fallbacks=[("deepseek", "deepseek-chat", deepseek_call)],
+            on_all_fail=handle_all_fail
+        )
+        def call_gpt(prompt):
+            return openai.chat.completions.create(...)
+    
+    Args:
+        fallbacks: Fallback 链列表，每项为 (provider, model, call_function)
+        on_all_fail: 所有 fallback 都失败时的回调函数，接收异常列表
+    
+    Returns:
+        装饰后的函数，失败时自动 fallback
+    """
+    
+    def decorator(func: Callable) -> Callable:
+        is_async = asyncio.iscoroutinefunction(func)
+        
+        if is_async:
+            @functools.wraps(func)
+            async def async_wrapper(*args, **kwargs) -> Any:
+                errors: List[Exception] = []
+                
+                # 尝试主函数
+                try:
+                    return await func(*args, **kwargs)
+                except Exception as e:
+                    errors.append(e)
+                
+                # 尝试 fallbacks
+                for provider, model, fallback_func in (fallbacks or []):
+                    try:
+                        if asyncio.iscoroutinefunction(fallback_func):
+                            return await fallback_func(*args, **kwargs)
+                        else:
+                            return fallback_func(*args, **kwargs)
+                    except Exception as e:
+                        errors.append(e)
+                
+                # 所有都失败
+                if on_all_fail:
+                    return on_all_fail(errors)
+                raise FallbackError(
+                    f"All providers failed: {[str(e) for e in errors]}"
+                )
+            
+            return async_wrapper
+        else:
+            @functools.wraps(func)
+            def sync_wrapper(*args, **kwargs) -> Any:
+                errors: List[Exception] = []
+                
+                # 尝试主函数
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    errors.append(e)
+                
+                # 尝试 fallbacks
+                for provider, model, fallback_func in (fallbacks or []):
+                    try:
+                        return fallback_func(*args, **kwargs)
+                    except Exception as e:
+                        errors.append(e)
+                
+                # 所有都失败
+                if on_all_fail:
+                    return on_all_fail(errors)
+                raise FallbackError(
+                    f"All providers failed: {[str(e) for e in errors]}"
+                )
+            
+            return sync_wrapper
+    
+    return decorator
+
+
+# ==================== Circuit Breaker 装饰器 ====================
+
+
+class CircuitState:
+    """Circuit Breaker 状态"""
+    CLOSED = "closed"  # 正常状态，允许调用
+    OPEN = "open"      # 禁止状态，拒绝调用
+    HALF_OPEN = "half_open"  # 半开状态，允许少量调用探测
+
+
+class CircuitBreaker:
+    """
+    Circuit Breaker - 防止对失败的 provider 进行持续调用
+    
+    当 provider 连续失败达到阈值时，自动"断开"，一段时间后尝试恢复。
+    
+    使用示例:
+        breaker = CircuitBreaker(
+            failure_threshold=5,
+            recovery_timeout=60,
+        )
+        
+        @breaker.decorate
+        def call_gpt(prompt: str):
+            return openai.chat.completions.create(...)
+        
+        # 如果连续失败5次，breaker 进入 OPEN 状态
+        # 60秒后进入 HALF_OPEN，允许一次探测调用
+    """
+    
+    def __init__(
+        self,
+        failure_threshold: int = 5,
+        recovery_timeout: float = 60.0,
+        half_open_max_calls: int = 1,
+    ):
+        self.failure_threshold = failure_threshold
+        self.recovery_timeout = recovery_timeout
+        self.half_open_max_calls = half_open_max_calls
+        
+        self._state = CircuitState.CLOSED
+        self._failure_count = 0
+        self._last_failure_time: Optional[float] = None
+        self._half_open_calls = 0
+        self._lock = None
+    
+    def _get_lock(self):
+        """获取或创建锁（延迟初始化）"""
+        if self._lock is None:
+            try:
+                if asyncio.get_event_loop().is_running():
+                    self._lock = asyncio.Lock()
+            except RuntimeError:
+                pass
+        return self._lock
+    
+    @property
+    def state(self) -> str:
+        """当前状态"""
+        import time
+        if self._state == CircuitState.OPEN:
+            # 检查是否应该进入 HALF_OPEN
+            if self._last_failure_time and \
+               time.time() - self._last_failure_time >= self.recovery_timeout:
+                self._state = CircuitState.HALF_OPEN
+                self._half_open_calls = 0
+        return self._state
+    
+    def _record_success(self):
+        """记录成功调用"""
+        self._failure_count = 0
+        self._state = CircuitState.CLOSED
+        self._half_open_calls = 0
+    
+    def _record_failure(self):
+        """记录失败调用"""
+        import time
+        self._failure_count += 1
+        self._last_failure_time = time.time()
+        
+        if self._state == CircuitState.HALF_OPEN:
+            # HALF_OPEN 状态失败，回到 OPEN
+            self._state = CircuitState.OPEN
+        elif self._failure_count >= self.failure_threshold:
+            # 达到阈值，进入 OPEN
+            self._state = CircuitState.OPEN
+    
+    def _can_execute(self) -> bool:
+        """检查是否允许执行"""
+        state = self.state
+        
+        if state == CircuitState.CLOSED:
+            return True
+        
+        if state == CircuitState.HALF_OPEN:
+            if self._half_open_calls < self.half_open_max_calls:
+                self._half_open_calls += 1
+                return True
+            return False
+        
+        # OPEN 状态不允许
+        return False
+    
+    def decorate(self, func: Callable) -> Callable:
+        """装饰函数"""
+        is_async = asyncio.iscoroutinefunction(func)
+        
+        if is_async:
+            @functools.wraps(func)
+            async def async_wrapper(*args, **kwargs) -> Any:
+                if not self._can_execute():
+                    raise FallbackError(
+                        f"Circuit breaker is {self.state}, refusing call"
+                    )
+                
+                try:
+                    result = await func(*args, **kwargs)
+                    self._record_success()
+                    return result
+                except Exception as e:
+                    self._record_failure()
+                    raise
+            
+            return async_wrapper
+        else:
+            @functools.wraps(func)
+            def sync_wrapper(*args, **kwargs) -> Any:
+                if not self._can_execute():
+                    raise FallbackError(
+                        f"Circuit breaker is {self.state}, refusing call"
+                    )
+                
+                try:
+                    result = func(*args, **kwargs)
+                    self._record_success()
+                    return result
+                except Exception as e:
+                    self._record_failure()
+                    raise
+            
+            return sync_wrapper
+
+
 # ==================== 导出所有装饰器 ====================
 
 __all__ = [
@@ -1035,4 +1289,8 @@ __all__ = [
     "TimeoutError",
     "with_cache",
     "ResponseCache",
+    "with_fallback",
+    "FallbackError",
+    "CircuitBreaker",
+    "CircuitState",
 ]

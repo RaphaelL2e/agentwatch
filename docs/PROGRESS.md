@@ -200,6 +200,18 @@
 +  - ResponseCache 缓存类（TTL、过期清理、统计）
 +- **2026-04-28**: SDK 测试增至 57 个（新增 20 个 timeout/cache 测试）
 +- **2026-04-28**: 版本升级至 0.5.0 🎉
++- **2026-04-29**: SDK 新增 fallback/circuit breaker 装饰器
++  - with_fallback: 自动切换备用 provider/model，支持多级 fallback 链
++  - CircuitBreaker: 连续失败自动断开，支持 CLOSED/OPEN/HALF_OPEN 状态
++  - FallbackError 异常类型
++  - CircuitState 状态常量
++- **2026-04-29**: 前端新增 CostOptimization 组件
++  - 成本优化计算器：对比不同 provider 成本节省
++  - 实时计算月度/年度节省金额
++  - 展示 DeepSeek 1/107 成本优势
++  - 可视化 provider 成本对比表
++- **2026-04-29**: SDK 测试增至 65 个（新增 10 个 fallback/circuit breaker 测试）
++- **2026-04-29**: 版本升级至 0.6.0 🎉
 
 ---
 

@@ -12,10 +12,34 @@ AI Agent 监控 Python 客户端库
         response = openai.chat.completions.create(...)
 """
 
-__version__ = "0.2.0"
+__version__ = "0.6.0"
 
 from .client import AgentWatch, TraceContext
-from .decorators import trace_agent
+from .decorators import (
+    trace_agent,
+    trace_openai_call,
+    trace_anthropic_call,
+    trace_deepseek_call,
+    trace_gemini_call,
+    trace_streaming,
+    StreamingTraceWrapper,
+    TracedAgent,
+    AsyncTracedAgent,
+    quick_trace,
+    async_quick_trace,
+    with_retry,
+    with_rate_limit,
+    RateLimiter,
+    traced_llm_call,
+    with_timeout,
+    TimeoutError as DecoratorTimeoutError,
+    with_cache,
+    ResponseCache,
+    with_fallback,
+    FallbackError,
+    CircuitBreaker,
+    CircuitState,
+)
 from .exceptions import (
     AgentWatchError,
     ConnectionError,
@@ -38,7 +62,31 @@ from .exceptions import (
 __all__ = [
     "AgentWatch",
     "TraceContext",
+    # Core decorators
     "trace_agent",
+    "trace_openai_call",
+    "trace_anthropic_call",
+    "trace_deepseek_call",
+    "trace_gemini_call",
+    "trace_streaming",
+    "StreamingTraceWrapper",
+    "TracedAgent",
+    "AsyncTracedAgent",
+    "quick_trace",
+    "async_quick_trace",
+    # Utility decorators
+    "with_retry",
+    "with_rate_limit",
+    "RateLimiter",
+    "traced_llm_call",
+    "with_timeout",
+    "DecoratorTimeoutError",
+    "with_cache",
+    "ResponseCache",
+    "with_fallback",
+    "FallbackError",
+    "CircuitBreaker",
+    "CircuitState",
     # 异常类
     "AgentWatchError",
     "ConnectionError",

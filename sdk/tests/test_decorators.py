@@ -566,3 +566,271 @@ class TestWithCacheDecorator:
         result2 = await async_cached_func("test")
         assert result2 == "async_result_test"
         assert call_count[0] == 1  # Still 1, cached
+
+
+class TestFallbackDecorator:
+    """Tests for fallback decorator"""
+
+    def test_with_fallback_sync_success(self):
+        """Test fallback decorator on successful sync call"""
+        from agentwatch.decorators import with_fallback
+
+        @with_fallback(fallbacks=[])
+        def successful_func():
+            return "success"
+
+        result = successful_func()
+        assert result == "success"
+
+    def test_with_fallback_sync_primary_fails_fallback_succeeds(self):
+        """Test fallback decorator when primary fails but fallback succeeds"""
+        from agentwatch.decorators import with_fallback
+
+        def fallback_func(prompt):
+            return "fallback_result"
+
+        @with_fallback(fallbacks=[
+            ("deepseek", "deepseek-chat", fallback_func),
+        ])
+        def primary_func(prompt):
+            raise ValueError("Primary failed")
+
+        result = primary_func("test")
+        assert result == "fallback_result"
+
+    def test_with_fallback_sync_all_fail(self):
+        """Test fallback decorator when all calls fail"""
+        from agentwatch.decorators import with_fallback, FallbackError
+
+        def fallback_func1(prompt):
+            raise ValueError("Fallback 1 failed")
+
+        def fallback_func2(prompt):
+            raise ValueError("Fallback 2 failed")
+
+        @with_fallback(fallbacks=[
+            ("deepseek", "deepseek-chat", fallback_func1),
+            ("anthropic", "claude-3-haiku", fallback_func2),
+        ])
+        def primary_func(prompt):
+            raise ValueError("Primary failed")
+
+        with pytest.raises(FallbackError):
+            primary_func("test")
+
+    def test_with_fallback_sync_with_callback(self):
+        """Test fallback decorator with on_all_fail callback"""
+        from agentwatch.decorators import with_fallback
+
+        def on_all_fail(errors):
+            return {"error": "all_failed", "count": len(errors)}
+
+        def fallback_func(prompt):
+            raise ValueError("Fallback failed")
+
+        @with_fallback(
+            fallbacks=[("deepseek", "deepseek-chat", fallback_func)],
+            on_all_fail=on_all_fail
+        )
+        def primary_func(prompt):
+            raise ValueError("Primary failed")
+
+        result = primary_func("test")
+        assert result["error"] == "all_failed"
+        assert result["count"] == 2  # Primary + fallback
+
+    @pytest.mark.asyncio
+    async def test_with_fallback_async_success(self):
+        """Test fallback decorator on successful async call"""
+        from agentwatch.decorators import with_fallback
+
+        @with_fallback(fallbacks=[])
+        async def async_successful_func():
+            return "async_success"
+
+        result = await async_successful_func()
+        assert result == "async_success"
+
+    @pytest.mark.asyncio
+    async def test_with_fallback_async_with_async_fallback(self):
+        """Test fallback decorator with async fallback function"""
+        from agentwatch.decorators import with_fallback
+
+        async def async_fallback_func(prompt):
+            await asyncio.sleep(0.01)
+            return "async_fallback_result"
+
+        @with_fallback(fallbacks=[
+            ("deepseek", "deepseek-chat", async_fallback_func),
+        ])
+        async def async_primary_func(prompt):
+            raise ValueError("Async primary failed")
+
+        result = await async_primary_func("test")
+        assert result == "async_fallback_result"
+
+    @pytest.mark.asyncio
+    async def test_with_fallback_async_all_fail(self):
+        """Test fallback decorator when all async calls fail"""
+        from agentwatch.decorators import with_fallback, FallbackError
+
+        async def async_fallback_func(prompt):
+            raise ValueError("Async fallback failed")
+
+        @with_fallback(fallbacks=[
+            ("deepseek", "deepseek-chat", async_fallback_func),
+        ])
+        async def async_primary_func(prompt):
+            raise ValueError("Async primary failed")
+
+        with pytest.raises(FallbackError):
+            await async_primary_func("test")
+
+
+class TestCircuitBreaker:
+    """Tests for Circuit Breaker"""
+
+    def test_circuit_breaker_init(self):
+        """Test CircuitBreaker initialization"""
+        from agentwatch.decorators import CircuitBreaker, CircuitState
+
+        breaker = CircuitBreaker(
+            failure_threshold=5,
+            recovery_timeout=60.0,
+        )
+        assert breaker.failure_threshold == 5
+        assert breaker.recovery_timeout == 60.0
+        assert breaker.state == CircuitState.CLOSED
+
+    def test_circuit_breaker_closed_state_allows_calls(self):
+        """Test CircuitBreaker allows calls in CLOSED state"""
+        from agentwatch.decorators import CircuitBreaker
+
+        breaker = CircuitBreaker(failure_threshold=3)
+
+        @breaker.decorate
+        def successful_func():
+            return "success"
+
+        result = successful_func()
+        assert result == "success"
+        assert breaker._failure_count == 0
+
+    def test_circuit_breaker_records_failures(self):
+        """Test CircuitBreaker records failures"""
+        from agentwatch.decorators import CircuitBreaker
+
+        breaker = CircuitBreaker(failure_threshold=3)
+
+        @breaker.decorate
+        def failing_func():
+            raise ValueError("Failed")
+
+        # First failure
+        with pytest.raises(ValueError):
+            failing_func()
+        assert breaker._failure_count == 1
+
+        # Second failure
+        with pytest.raises(ValueError):
+            failing_func()
+        assert breaker._failure_count == 2
+
+    def test_circuit_breaker_open_state_blocks_calls(self):
+        """Test CircuitBreaker blocks calls in OPEN state"""
+        from agentwatch.decorators import CircuitBreaker, CircuitState, FallbackError
+
+        breaker = CircuitBreaker(failure_threshold=2)
+
+        @breaker.decorate
+        def failing_func():
+            raise ValueError("Failed")
+
+        # Trigger failures to open circuit
+        with pytest.raises(ValueError):
+            failing_func()
+        with pytest.raises(ValueError):
+            failing_func()
+
+        # Circuit should now be OPEN
+        assert breaker.state == CircuitState.OPEN
+
+        # Next call should be blocked
+        with pytest.raises(FallbackError):
+            failing_func()
+
+    def test_circuit_breaker_success_resets_failures(self):
+        """Test CircuitBreaker resets failure count on success"""
+        from agentwatch.decorators import CircuitBreaker
+
+        breaker = CircuitBreaker(failure_threshold=5)
+
+        @breaker.decorate
+        def sometimes_fails(should_fail):
+            if should_fail:
+                raise ValueError("Failed")
+            return "success"
+
+        # Cause some failures
+        with pytest.raises(ValueError):
+            sometimes_fails(True)
+        with pytest.raises(ValueError):
+            sometimes_fails(True)
+        assert breaker._failure_count == 2
+
+        # Success should reset
+        result = sometimes_fails(False)
+        assert result == "success"
+        assert breaker._failure_count == 0
+
+    @pytest.mark.asyncio
+    async def test_circuit_breaker_async(self):
+        """Test CircuitBreaker with async function"""
+        from agentwatch.decorators import CircuitBreaker, CircuitState
+
+        breaker = CircuitBreaker(failure_threshold=3)
+
+        @breaker.decorate
+        async def async_func(should_fail):
+            await asyncio.sleep(0.01)
+            if should_fail:
+                raise ValueError("Async failed")
+            return "async_success"
+
+        # Success
+        result = await async_func(False)
+        assert result == "async_success"
+        assert breaker.state == CircuitState.CLOSED
+
+        # Failure
+        with pytest.raises(ValueError):
+            await async_func(True)
+        assert breaker._failure_count == 1
+
+    def test_circuit_state_constants(self):
+        """Test CircuitState constants"""
+        from agentwatch.decorators import CircuitState
+
+        assert CircuitState.CLOSED == "closed"
+        assert CircuitState.OPEN == "open"
+        assert CircuitState.HALF_OPEN == "half_open"
+
+    def test_circuit_breaker_can_execute_method(self):
+        """Test CircuitBreaker._can_execute logic"""
+        from agentwatch.decorators import CircuitBreaker, CircuitState
+
+        breaker = CircuitBreaker(failure_threshold=3)
+
+        # CLOSED state allows
+        breaker._state = CircuitState.CLOSED
+        assert breaker._can_execute() == True
+
+        # OPEN state blocks
+        breaker._state = CircuitState.OPEN
+        assert breaker._can_execute() == False
+
+        # HALF_OPEN allows limited calls
+        breaker._state = CircuitState.HALF_OPEN
+        breaker._half_open_calls = 0
+        assert breaker._can_execute() == True
+        assert breaker._half_open_calls == 1
