@@ -213,7 +213,7 @@ class MemoryStorage(TraceStorage):
             if end_time and trace.created_at > end_time:
                 continue
             
-            key = f"{trace.provider}_{trace.model}"
+            key = f"{trace.provider.value}_{trace.model}"
             groups[key]["total_traces"] += 1
             groups[key]["total_tokens"] += trace.total_tokens
             groups[key]["total_cost"] += trace.total_cost

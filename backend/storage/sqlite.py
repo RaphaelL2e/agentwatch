@@ -171,7 +171,7 @@ class SQLiteStorage(TraceStorage):
             'session_id': trace.session_id or '',
             'user_id': trace.user_id or '',
             'prompt': trace.prompt or '',
-            'events': json.dumps([e.dict() for e in trace.events]),
+            'events': json.dumps([e.model_dump(mode='json') for e in trace.events]),
             'total_input_tokens': trace.total_input_tokens,
             'total_output_tokens': trace.total_output_tokens,
             'total_tokens': trace.total_tokens,
@@ -603,7 +603,7 @@ class SQLiteStorage(TraceStorage):
         traces = self.list_traces(page=1, page_size=10000)
         
         with open(output_path, 'w') as f:
-            json.dump([t.dict() for t in traces.traces], f, indent=2)
+            json.dump([t.model_dump(mode='json') for t in traces.traces], f, indent=2)
         
         return traces.total
     
