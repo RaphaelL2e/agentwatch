@@ -16,11 +16,19 @@ import httpx
 @dataclass
 class AgentWatchConfig:
     """AgentWatch 配置"""
-
+    
     api_url: str = "http://localhost:8000"
     api_key: Optional[str] = None
     timeout: float = 30.0
     auto_start: bool = True  # 自动创建trace
+    
+    # 重试配置
+    max_retries: int = 3
+    retry_delay: float = 1.0  # 初始延迟（秒）
+    retry_multiplier: float = 2.0  # 指数退避乘数
+    retry_on_timeout: bool = True
+    retry_on_connection: bool = True
+    retry_on_server_error: bool = True
 
 
 class AgentWatch:
@@ -77,24 +85,148 @@ class AgentWatch:
         return headers
 
     def _request(self, method: str, path: str, data: Optional[Dict] = None) -> Dict:
-        """发送请求"""
+        """
+        发送请求（带重试机制）
+        
+        Args:
+            method: HTTP 方法 (GET/POST/PUT/DELETE)
+            path: API 路径
+            data: 请求体数据
+            
+        Returns:
+            API 响应数据
+            
+        Raises:
+            ConnectionError: 网络连接失败
+            AuthenticationError: 认证失败
+            RateLimitError: 请求频率超限
+            ServerError: 服务器错误
+            TimeoutError: 超时
+            APIError: 其他 API 错误
+        """
+        from .exceptions import (
+            ConnectionError as AWConnectionError,
+            AuthenticationError,
+            APIError,
+            RateLimitError,
+            ServerError,
+            TimeoutError as AWTimeoutError,
+            is_retryable_error,
+            get_retry_delay,
+        )
+        
         url = f"{self.config.api_url}{path}"
-        try:
-            if method == "GET":
-                resp = self._client.get(url, headers=self._get_headers())
-            elif method == "POST":
-                resp = self._client.post(url, headers=self._get_headers(), json=data)
-            elif method == "PUT":
-                resp = self._client.put(url, headers=self._get_headers(), json=data)
-            elif method == "DELETE":
-                resp = self._client.delete(url, headers=self._get_headers())
-            else:
-                raise ValueError(f"Unknown method: {method}")
-
-            resp.raise_for_status()
-            return resp.json()
-        except httpx.HTTPError as e:
-            return {"error": str(e), "status": "failed"}
+        last_error = None
+        
+        for attempt in range(self.config.max_retries + 1):
+            try:
+                if method == "GET":
+                    resp = self._client.get(url, headers=self._get_headers())
+                elif method == "POST":
+                    resp = self._client.post(url, headers=self._get_headers(), json=data)
+                elif method == "PUT":
+                    resp = self._client.put(url, headers=self._get_headers(), json=data)
+                elif method == "DELETE":
+                    resp = self._client.delete(url, headers=self._get_headers())
+                else:
+                    raise ValueError(f"Unknown method: {method}")
+                
+                # 成功响应
+                if resp.status_code < 400:
+                    return resp.json()
+                
+                # 处理错误响应
+                if resp.status_code == 401:
+                    raise AuthenticationError(
+                        message="Invalid API key",
+                        request_id=resp.headers.get("x-request-id"),
+                    )
+                
+                if resp.status_code == 404:
+                    raise APIError(
+                        message=f"Not found: {path}",
+                        status_code=404,
+                        request_id=resp.headers.get("x-request-id"),
+                    )
+                
+                if resp.status_code == 400:
+                    body = resp.text[:500]
+                    raise APIError(
+                        message=f"Bad request: {body}",
+                        status_code=400,
+                        request_id=resp.headers.get("x-request-id"),
+                    )
+                
+                if resp.status_code == 429:
+                    retry_after = resp.headers.get("retry-after")
+                    raise RateLimitError(
+                        message="Rate limit exceeded",
+                        retry_after=int(retry_after) if retry_after else None,
+                        request_id=resp.headers.get("x-request-id"),
+                    )
+                
+                if resp.status_code >= 500:
+                    raise ServerError(
+                        message=f"Server error: {resp.status_code}",
+                        status_code=resp.status_code,
+                        request_id=resp.headers.get("x-request-id"),
+                    )
+                
+                # 其他错误
+                raise APIError(
+                    message=f"API error: {resp.status_code}",
+                    status_code=resp.status_code,
+                    request_id=resp.headers.get("x-request-id"),
+                )
+                
+            except httpx.TimeoutException as e:
+                last_error = AWTimeoutError(
+                    message=f"Request timeout after {self.config.timeout}s",
+                    timeout_seconds=self.config.timeout,
+                    operation=path,
+                )
+                
+                # 是否重试
+                if attempt < self.config.max_retries and self.config.retry_on_timeout:
+                    delay = self.config.retry_delay * (self.config.retry_multiplier ** attempt)
+                    time.sleep(delay)
+                    continue
+                raise last_error
+                
+            except httpx.ConnectError as e:
+                last_error = AWConnectionError(
+                    message=f"Failed to connect to {self.config.api_url}",
+                    api_url=self.config.api_url,
+                )
+                
+                # 是否重试
+                if attempt < self.config.max_retries and self.config.retry_on_connection:
+                    delay = self.config.retry_delay * (self.config.retry_multiplier ** attempt)
+                    time.sleep(delay)
+                    continue
+                raise last_error
+                
+            except httpx.HTTPStatusError as e:
+                # 已在上面处理，这里只是捕获
+                raise
+                
+            except Exception as e:
+                # 其他异常（如 RateLimitError, ServerError）
+                if hasattr(e, 'code') and is_retryable_error(e):
+                    last_error = e
+                    
+                    if attempt < self.config.max_retries:
+                        delay = get_retry_delay(e) if isinstance(e, RateLimitError) else \
+                                self.config.retry_delay * (self.config.retry_multiplier ** attempt)
+                        time.sleep(delay)
+                        continue
+                raise
+        
+        # 所有重试失败
+        if last_error:
+            raise last_error
+        
+        raise AWConnectionError(message="Unknown error after retries")
 
     def health_check(self) -> Dict:
         """健康检查"""
