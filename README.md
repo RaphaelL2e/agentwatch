@@ -12,9 +12,11 @@
 
 - **Trace 追踪** - 完整记录 Agent 执行流程，包括输入输出、Token 使用、延迟等
 - **成本监控** - 实时计算各模型（OpenAI、Anthropic、DeepSeek、Google）的 API 成本
+- **成本告警** - 日/月成本阈值告警，Token 突增检测，失败率监控
 - **性能分析** - 提供延迟统计、成功率分析、执行时间分布
 - **多 Provider 支持** - 统一监控 OpenAI、Claude、DeepSeek、Gemini 等主流模型
-- **Dashboard 可视化** - 实时查看 Agent 运行状态和统计数据
+- **Dashboard 可视化** - 实时查看 Agent 运行状态和统计数据，WebSocket 实时推送
+- **真实集成示例** - Claude/DeepSeek SDK 集成示例，展示实际 API 监控
 
 ## 🚀 快速开始
 
