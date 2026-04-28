@@ -212,6 +212,17 @@
 +  - 可视化 provider 成本对比表
 +- **2026-04-29**: SDK 测试增至 65 个（新增 10 个 fallback/circuit breaker 测试）
 +- **2026-04-29**: 版本升级至 0.6.0 🎉
++- **2026-04-29**: Backend 新增 Storage 单元测试
++  - 28 个测试（Memory + SQLite 各 16 个）
++  - 覆盖 CRUD、查询、统计、持久化
++  - 修复 MemoryStorage provider 序列化 bug
++  - 修复 SQLiteStorage Pydantic v2 兼容性
++- **2026-04-29**: Settings 页面增强
++  - 后端连接状态实时显示
++  - 版本、运行时间、Trace 数量展示
++  - 存储类型指示器
++  - 30 秒自动刷新状态
++- **2026-04-29**: Backend 测试增至 72 个（新增 28 个 Storage 测试）✅
 
 ---
 
