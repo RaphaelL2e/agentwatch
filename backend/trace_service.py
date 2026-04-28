@@ -1,6 +1,12 @@
 """
 AgentWatch Trace 服务层
 处理 Trace 数据的存储和查询
+
+支持多种存储后端：
+- memory: 内存存储（默认）
+- clickhouse: ClickHouse（生产）
+- postgres: PostgreSQL（待实现）
+- mongodb: MongoDB（待实现）
 """
 
 import uuid
@@ -18,15 +24,15 @@ from models import (
     CostSummary,
     AgentProvider,
 )
-
-# 内存存储（Day 2先用内存，后续迁移到ClickHouse）
-_traces: Dict[str, TraceResponse] = {}
-_trace_counter = defaultdict(int)  # 统计计数器
+from storage import TraceStorage, StorageFactory, MemoryStorage
 
 
 class TraceService:
-    """Trace 服务"""
-
+    """Trace 服务 - 业务逻辑层"""
+    
+    # 存储实例（依赖注入）
+    _storage: TraceStorage = None
+    
     # Token 成本配置 (USD per 1K tokens)
     TOKEN_COSTS = {
         "openai": {
@@ -55,6 +61,35 @@ class TraceService:
     }
 
     DEFAULT_COST = {"input": 0.001, "output": 0.002}  # 默认成本
+    
+    @classmethod
+    def init_storage(cls, storage_type: str = "memory", **kwargs) -> None:
+        """
+        初始化存储
+        
+        Args:
+            storage_type: 存储类型（memory, clickhouse 等）
+            **kwargs: 存储配置参数
+            
+        Examples:
+            # 内存存储
+            TraceService.init_storage("memory")
+            
+            # ClickHouse 存储
+            TraceService.init_storage(
+                "clickhouse",
+                host="localhost",
+                port=9000
+            )
+        """
+        cls._storage = StorageFactory.create(storage_type, **kwargs)
+    
+    @classmethod
+    def get_storage(cls) -> TraceStorage:
+        """获取存储实例（懒加载）"""
+        if cls._storage is None:
+            cls._storage = MemoryStorage()
+        return cls._storage
 
     @staticmethod
     def generate_trace_id() -> str:
@@ -80,88 +115,51 @@ class TraceService:
     @staticmethod
     def create_trace(trace_data: TraceCreate) -> TraceResponse:
         """创建 Trace"""
-        now = datetime.utcnow()
-        trace_id = trace_data.trace_id or TraceService.generate_trace_id()
-
-        trace = TraceResponse(
-            trace_id=trace_id,
-            agent_id=trace_data.agent_id,
-            agent_name=trace_data.agent_name,
-            provider=trace_data.provider,
-            model=trace_data.model,
-            status=TraceStatus.RUNNING,
-            session_id=trace_data.session_id,
-            user_id=trace_data.user_id,
-            prompt=trace_data.prompt,
-            events=[],
-            created_at=now,
-            updated_at=now,
-            metadata=trace_data.metadata or {},
-        )
-
-        _traces[trace_id] = trace
-        _trace_counter["total"] += 1
-        _trace_counter[f"provider_{trace_data.provider}"] += 1
-
+        storage = TraceService.get_storage()
+        
+        # 添加成本计算逻辑
+        trace = storage.create_trace(trace_data)
+        
         return trace
 
     @staticmethod
     def get_trace(trace_id: str) -> Optional[TraceResponse]:
         """获取 Trace"""
-        return _traces.get(trace_id)
+        storage = TraceService.get_storage()
+        return storage.get_trace(trace_id)
 
     @staticmethod
     def update_trace(
         trace_id: str, update_data: TraceUpdate
     ) -> Optional[TraceResponse]:
-        """更新 Trace"""
-        trace = _traces.get(trace_id)
+        """更新 Trace（包含成本计算）"""
+        storage = TraceService.get_storage()
+        
+        trace = storage.get_trace(trace_id)
         if not trace:
             return None
-
-        # 更新字段
-        if update_data.status:
-            trace.status = update_data.status
-            if update_data.status in [
-                TraceStatus.COMPLETED,
-                TraceStatus.FAILED,
-                TraceStatus.TIMEOUT,
-            ]:
-                trace.completed_at = datetime.utcnow()
-
+        
+        # 重新计算成本（如果 token 有变化）
         if update_data.events:
-            trace.events.extend(update_data.events)
-            # 计算总 token
-            total_input = sum(e.input_tokens for e in trace.events)
-            total_output = sum(e.output_tokens for e in trace.events)
-            trace.total_input_tokens = total_input
-            trace.total_output_tokens = total_output
-            trace.total_tokens = total_input + total_output
-            trace.total_cost = TraceService.calculate_cost(
-                trace.provider, trace.model, total_input, total_output
-            )
-            # 计算总延迟
-            trace.duration_ms = sum(e.latency_ms for e in trace.events)
-
-        if update_data.total_tokens:
-            trace.total_tokens = update_data.total_tokens
-
-        if update_data.total_cost:
-            trace.total_cost = update_data.total_cost
-
-        if update_data.duration_ms:
-            trace.duration_ms = update_data.duration_ms
-
-        if update_data.error_message:
-            trace.error_message = update_data.error_message
-
-        if update_data.metadata:
-            trace.metadata.update(update_data.metadata)
-
-        trace.updated_at = datetime.utcnow()
-        _traces[trace_id] = trace
-
-        return trace
+            # 获取更新后的 trace
+            updated = storage.update_trace(trace_id, update_data)
+            if updated and updated.total_tokens > 0:
+                # 计算成本
+                cost = TraceService.calculate_cost(
+                    updated.provider,
+                    updated.model,
+                    updated.total_input_tokens,
+                    updated.total_output_tokens
+                )
+                # 再次更新成本
+                storage.update_trace(
+                    trace_id,
+                    TraceUpdate(total_cost=cost)
+                )
+        else:
+            updated = storage.update_trace(trace_id, update_data)
+        
+        return updated
 
     @staticmethod
     def add_event(trace_id: str, event: TraceEvent) -> Optional[TraceResponse]:
@@ -179,36 +177,15 @@ class TraceService:
         end_time: Optional[datetime] = None,
     ) -> TraceListResponse:
         """列出 Traces"""
-        # 过滤
-        filtered = []
-        for trace in _traces.values():
-            if agent_id and trace.agent_id != agent_id:
-                continue
-            if provider and trace.provider != provider:
-                continue
-            if status and trace.status != status:
-                continue
-            if start_time and trace.created_at < start_time:
-                continue
-            if end_time and trace.created_at > end_time:
-                continue
-            filtered.append(trace)
-
-        # 按创建时间倒序排序
-        filtered.sort(key=lambda t: t.created_at, reverse=True)
-
-        # 分页
-        total = len(filtered)
-        start_idx = (page - 1) * page_size
-        end_idx = start_idx + page_size
-        page_traces = filtered[start_idx:end_idx]
-
-        return TraceListResponse(
-            traces=page_traces,
-            total=total,
+        storage = TraceService.get_storage()
+        return storage.list_traces(
             page=page,
             page_size=page_size,
-            has_more=end_idx < total,
+            agent_id=agent_id,
+            provider=provider,
+            status=status,
+            start_time=start_time,
+            end_time=end_time,
         )
 
     @staticmethod
@@ -218,86 +195,27 @@ class TraceService:
         end_time: Optional[datetime] = None,
     ) -> List[CostSummary]:
         """获取成本汇总"""
-        # 按provider+model分组
-        groups: Dict[str, Dict] = defaultdict(
-            lambda: {
-                "total_traces": 0,
-                "total_tokens": 0,
-                "total_cost": 0.0,
-                "latencies": [],
-            }
+        storage = TraceService.get_storage()
+        return storage.get_cost_summary(
+            provider=provider,
+            start_time=start_time,
+            end_time=end_time,
         )
-
-        for trace in _traces.values():
-            if trace.status != TraceStatus.COMPLETED:
-                continue
-            if provider and trace.provider != provider:
-                continue
-            if start_time and trace.created_at < start_time:
-                continue
-            if end_time and trace.created_at > end_time:
-                continue
-
-            key = f"{trace.provider}_{trace.model}"
-            groups[key]["total_traces"] += 1
-            groups[key]["total_tokens"] += trace.total_tokens
-            groups[key]["total_cost"] += trace.total_cost
-            groups[key]["latencies"].append(trace.duration_ms)
-
-        summaries = []
-        for key, data in groups.items():
-            parts = key.split("_", 1)
-            provider_str = parts[0]
-            model = parts[1] if len(parts) > 1 else ""
-
-            # 将字符串转换为 AgentProvider 枚举
-            try:
-                provider_enum = AgentProvider(provider_str)
-            except ValueError:
-                provider_enum = AgentProvider.CUSTOM
-
-            summaries.append(
-                CostSummary(
-                    provider=provider_enum,
-                    model=model,
-                    total_traces=data["total_traces"],
-                    total_tokens=data["total_tokens"],
-                    total_cost=data["total_cost"],
-                    avg_latency_ms=(
-                        sum(data["latencies"]) / len(data["latencies"])
-                        if data["latencies"]
-                        else 0
-                    ),
-                    period_start=start_time or datetime.utcnow() - timedelta(days=30),
-                    period_end=end_time or datetime.utcnow(),
-                )
-            )
-
-        return summaries
 
     @staticmethod
     def delete_trace(trace_id: str) -> bool:
         """删除 Trace"""
-        if trace_id in _traces:
-            del _traces[trace_id]
-            _trace_counter["total"] -= 1
-            return True
-        return False
+        storage = TraceService.get_storage()
+        return storage.delete_trace(trace_id)
 
     @staticmethod
     def get_stats() -> Dict[str, Any]:
         """获取统计信息"""
-        return {
-            "total_traces": _trace_counter["total"],
-            "running_traces": len(
-                [t for t in _traces.values() if t.status == TraceStatus.RUNNING]
-            ),
-            "completed_traces": len(
-                [t for t in _traces.values() if t.status == TraceStatus.COMPLETED]
-            ),
-            "failed_traces": len(
-                [t for t in _traces.values() if t.status == TraceStatus.FAILED]
-            ),
-            "total_cost": sum(t.total_cost for t in _traces.values()),
-            "providers": dict(_trace_counter),
-        }
+        storage = TraceService.get_storage()
+        return storage.get_stats()
+    
+    @staticmethod
+    def get_storage_info() -> Dict[str, Any]:
+        """获取存储信息"""
+        storage = TraceService.get_storage()
+        return storage.health_check()
