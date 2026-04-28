@@ -173,7 +173,13 @@
   - claude_integration.py: 5个示例（基础调用、多轮对话、成本对比、代码Agent、流式响应）
   - deepseek_integration.py: 6个示例（基础调用、vs GPT-4o对比、多轮对话、Reasoner R1、批量处理、企业Dashboard）
   - 核心卖点展示: DeepSeek成本仅GPT-4o的1/107
-- **2026-04-28**: Week 2 功能迭代开始 🚀
++- **2026-04-28**: Week 2 功能迭代开始 🚀
++- **2026-04-28**: 存储抽象接口设计完成（Repository Pattern）38KB
++  - storage/base.py: TraceStorage 抽象接口 + StorageFactory
++  - storage/memory.py: 内存存储实现（默认）
++  - storage/clickhouse.py: ClickHouse 存储骨架
++  - trace_service.py 重构为依赖注入模式
++  - 未来可扩展: PostgreSQL/MongoDB/SQLite 等
 
 ---
 
