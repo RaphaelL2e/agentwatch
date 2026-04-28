@@ -6,7 +6,7 @@
 
 ## 标题
 ```
-Show HN: AgentWatch – Open-source AI Agent monitoring platform (trace + cost + performance)
+Show HN: AgentWatch – Open-source AI Agent monitoring platform (trace + cost + WebSocket)
 ```
 
 ## 正文
@@ -20,21 +20,25 @@ The Problem:
 - AI agents are becoming increasingly complex, but there's no easy way to track what they're doing
 - API costs are hard to monitor and optimize (especially across multiple providers)
 - When agents fail, debugging is painful without execution traces
+- No real-time visibility into agent activity
 
 What I built:
 AgentWatch provides a unified interface to monitor your AI agents:
 
 1. Trace Tracking - Full execution flow with timestamps, inputs/outputs, and events
 2. Cost Monitoring - Real-time cost calculation for OpenAI, Anthropic, DeepSeek, Gemini
-3. Performance Analysis - Latency metrics, success rates, token usage
+3. Performance Analysis - Latency metrics, success rates, token usage histograms
+4. Real-time Updates - WebSocket for live dashboard updates (no polling!)
 
 Interesting finding: DeepSeek costs only 1/107 of OpenAI GPT-4o! With AgentWatch, you can discover these savings automatically.
 
 Key features:
 - Zero-intrusion Python SDK (context manager + decorator patterns)
-- Open-source (Apache 2.0), self-host on your infrastructure
-- React Dashboard for visualization
+- Repository Pattern storage abstraction (Memory → ClickHouse switch in one line)
+- React Dashboard with real-time WebSocket updates
 - Multi-provider support (OpenAI, Claude, DeepSeek, Gemini)
+- 42 tests with CI pipeline
+- Open-source (Apache 2.0), self-host on your infrastructure
 
 Quick start:
 ```
@@ -48,12 +52,28 @@ with aw.trace("my_agent", model="gpt-4o"):
                      output=response.usage.completion_tokens)
 ```
 
+Or use decorators for zero code intrusion:
+```
+from agentwatch.decorators import trace_agent
+
+@trace_agent("my_agent", model="gpt-4o")
+def call_gpt(prompt: str):
+    return openai.chat.completions.create(...)
+```
+
+Architecture highlights:
+- Backend: FastAPI with WebSocket support
+- Frontend: React + Tailwind + TanStack Query
+- Storage: Repository Pattern (swap backend without code changes)
+- Tests: 42 backend tests, pytest CI pipeline
+
 GitHub: https://github.com/RaphaelL2e/agentwatch
-Demo: http://localhost:3000 (after running backend)
 
-I'm a solo developer working on this as part of my journey to financial freedom. Would love feedback from the HN community!
+Tech stack: FastAPI + React + ClickHouse (optional) + Python SDK
 
-Thanks!
+I'm a solo developer building this on the path to financial freedom through indie hacking. Would love feedback from the HN community!
+
+What would you want to see in an AI agent monitoring tool?
 ```
 
 ## 备选标题
