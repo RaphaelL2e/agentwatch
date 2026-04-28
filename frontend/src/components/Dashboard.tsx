@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { Activity, DollarSign, Clock, AlertCircle, CheckCircle2, Loader2, Wifi, WifiOff } from 'lucide-react'
 import { api } from '../api'
 import { useRealTimeStats } from '../hooks/useWebSocket'
+import { CostAlerts, ProviderCostBreakdown, CostSavingSuggestions } from './CostAlerts'
 
 // 统计卡片组件
 function StatCard({ title, value, icon, color }: { 
@@ -180,6 +181,15 @@ function Dashboard() {
             Uptime: {health?.uptime_seconds ? `${Math.floor(health.uptime_seconds / 60)}m` : 'N/A'}
           </div>
         </div>
+      </div>
+      
+      {/* 成本告警 */}
+      <CostAlerts stats={stats} traces={traces?.traces} />
+      
+      {/* 成本分析 */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <ProviderCostBreakdown stats={stats} />
+        <CostSavingSuggestions stats={stats} />
       </div>
       
       {/* Trace 列表 */}
