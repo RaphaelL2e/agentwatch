@@ -189,6 +189,17 @@
 +- **2026-04-28**: Backend 测试增至 44 个（新增 7 个 Budget API 测试）
 +- **2026-04-28**: API 文档更新（Budget API 章节）
 +- **2026-04-28**: 版本升级至 0.4.0 🎉
++- **2026-04-28**: 新增前端实时活动组件 ActivityFeed.tsx
++  - 实时 WebSocket 事件可视化
++  - 支持 pause/resume、事件筛选、点击交互
++  - CompactActivityFeed 侧边栏变体
++- **2026-04-28**: SDK 新增 timeout/cache 装饰器
++  - with_timeout: 同步/异步超时控制，支持 fallback callback
++  - with_cache: 响应缓存，支持 TTL、max_size、自动 eviction
++  - TimeoutError 异常类型
++  - ResponseCache 缓存类（TTL、过期清理、统计）
++- **2026-04-28**: SDK 测试增至 57 个（新增 20 个 timeout/cache 测试）
++- **2026-04-28**: 版本升级至 0.5.0 🎉
 
 ---
 

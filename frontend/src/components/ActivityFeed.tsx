@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useWebSocket } from '../hooks/useWebSocket';
 import { 
   Activity, 
@@ -6,7 +6,6 @@ import {
   RefreshCw, 
   Trash2, 
   AlertTriangle,
-  CheckCircle,
   Clock,
   Zap,
   Wifi,
@@ -39,7 +38,7 @@ export function RealTimeActivityFeed({
   const [events, setEvents] = useState<ActivityEvent[]>([]);
   const [isPaused, setIsPaused] = useState(false);
   
-  const { isConnected, connectionStatus, lastMessage } = useWebSocket({
+  const { isConnected, connectionStatus } = useWebSocket({
     autoConnect: true,
     onTraceCreated: (trace) => {
       if (!isPaused) {
@@ -271,7 +270,7 @@ export function RealTimeActivityFeed({
 export function CompactActivityFeed({ maxEvents = 10 }: { maxEvents?: number }) {
   const [events, setEvents] = useState<ActivityEvent[]>([]);
   
-  const { isConnected, lastMessage } = useWebSocket({
+  const { isConnected } = useWebSocket({
     autoConnect: true,
     onTraceCreated: (trace) => {
       addEvent('trace_created', trace);
