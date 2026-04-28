@@ -302,3 +302,267 @@ class TestExtractTokens:
         
         _extract_tokens(mock_trace, MockResponse())
         mock_trace.log_tokens.assert_called_once_with(input=0, output=50)
+
+
+class TestTimeoutDecorator:
+    """Tests for timeout decorator"""
+    
+    def test_with_timeout_sync_success(self):
+        """Test timeout decorator on successful sync call"""
+        from agentwatch.decorators import with_timeout
+        
+        @with_timeout(seconds=5.0)
+        def quick_func():
+            return "success"
+        
+        result = quick_func()
+        assert result == "success"
+    
+    def test_with_timeout_sync_timeout(self):
+        """Test timeout decorator on sync call that exceeds timeout"""
+        from agentwatch.decorators import with_timeout, TimeoutError
+        import time
+        
+        @with_timeout(seconds=0.5)
+        def slow_func():
+            time.sleep(2.0)
+            return "too slow"
+        
+        with pytest.raises(TimeoutError):
+            slow_func()
+    
+    def test_with_timeout_sync_with_callback(self):
+        """Test timeout decorator with callback on timeout"""
+        from agentwatch.decorators import with_timeout
+        
+        def on_timeout():
+            return "fallback"
+        
+        @with_timeout(seconds=0.5, on_timeout=on_timeout)
+        def slow_func():
+            import time
+            time.sleep(2.0)
+            return "too slow"
+        
+        result = slow_func()
+        assert result == "fallback"
+    
+    @pytest.mark.asyncio
+    async def test_with_timeout_async_success(self):
+        """Test timeout decorator on successful async call"""
+        from agentwatch.decorators import with_timeout
+        
+        @with_timeout(seconds=5.0)
+        async def async_quick_func():
+            await asyncio.sleep(0.1)
+            return "async_success"
+        
+        result = await async_quick_func()
+        assert result == "async_success"
+    
+    @pytest.mark.asyncio
+    async def test_with_timeout_async_timeout(self):
+        """Test timeout decorator on async call that exceeds timeout"""
+        from agentwatch.decorators import with_timeout, TimeoutError
+        
+        @with_timeout(seconds=0.5)
+        async def async_slow_func():
+            await asyncio.sleep(2.0)
+            return "too slow"
+        
+        with pytest.raises(TimeoutError):
+            await async_slow_func()
+    
+    @pytest.mark.asyncio
+    async def test_with_timeout_async_with_callback(self):
+        """Test timeout decorator with callback on async timeout"""
+        from agentwatch.decorators import with_timeout
+        
+        def on_timeout():
+            return "async_fallback"
+        
+        @with_timeout(seconds=0.5, on_timeout=on_timeout)
+        async def async_slow_func():
+            await asyncio.sleep(2.0)
+            return "too slow"
+        
+        result = await async_slow_func()
+        assert result == "async_fallback"
+
+
+class TestResponseCache:
+    """Tests for response cache"""
+    
+    def test_response_cache_init(self):
+        """Test ResponseCache initialization"""
+        from agentwatch.decorators import ResponseCache
+        
+        cache = ResponseCache(max_size=100, ttl_seconds=60)
+        assert cache.max_size == 100
+        assert cache.ttl_seconds == 60
+        assert cache._cache == {}
+    
+    def test_response_cache_hash_key(self):
+        """Test cache key generation"""
+        from agentwatch.decorators import ResponseCache
+        
+        cache = ResponseCache()
+        key1 = cache._hash_key(("arg1", "arg2"), {"kwarg": "value"})
+        key2 = cache._hash_key(("arg1", "arg2"), {"kwarg": "value"})
+        key3 = cache._hash_key(("different",), {})
+        
+        # Same args should produce same key
+        assert key1 == key2
+        # Different args should produce different key
+        assert key1 != key3
+    
+    def test_response_cache_set_and_get(self):
+        """Test cache set and get"""
+        from agentwatch.decorators import ResponseCache
+        
+        cache = ResponseCache(max_size=10, ttl_seconds=60)
+        
+        # Set value
+        cache.set(("prompt",), {}, "response")
+        
+        # Get value
+        result = cache.get(("prompt",), {})
+        assert result == "response"
+    
+    def test_response_cache_get_expired(self):
+        """Test cache get returns None for expired entries"""
+        from agentwatch.decorators import ResponseCache
+        import time
+        
+        cache = ResponseCache(max_size=10, ttl_seconds=0.1)
+        
+        # Set value
+        cache.set(("prompt",), {}, "response")
+        
+        # Wait for expiration
+        time.sleep(0.2)
+        
+        # Get should return None
+        result = cache.get(("prompt",), {})
+        assert result is None
+    
+    def test_response_cache_eviction(self):
+        """Test cache eviction at max size"""
+        from agentwatch.decorators import ResponseCache
+        
+        cache = ResponseCache(max_size=3, ttl_seconds=60)
+        
+        # Fill cache
+        cache.set(("a",), {}, "a")
+        cache.set(("b",), {}, "b")
+        cache.set(("c",), {}, "c")
+        
+        # Add one more, should evict oldest
+        cache.set(("d",), {}, "d")
+        
+        assert len(cache._cache) == 3
+        assert cache.get(("d",), {}) == "d"
+    
+    def test_response_cache_clear(self):
+        """Test cache clear"""
+        from agentwatch.decorators import ResponseCache
+        
+        cache = ResponseCache()
+        cache.set(("a",), {}, "a")
+        cache.set(("b",), {}, "b")
+        
+        cache.clear()
+        
+        assert len(cache._cache) == 0
+        assert cache.get(("a",), {}) is None
+    
+    def test_response_cache_stats(self):
+        """Test cache stats"""
+        from agentwatch.decorators import ResponseCache
+        
+        cache = ResponseCache(max_size=100, ttl_seconds=60)
+        cache.set(("a",), {}, "a")
+        
+        stats = cache.stats()
+        assert stats["size"] == 1
+        assert stats["max_size"] == 100
+        assert stats["ttl_seconds"] == 60
+
+
+class TestWithCacheDecorator:
+    """Tests for cache decorator"""
+    
+    def test_with_cache_sync_first_call(self):
+        """Test cache decorator on first sync call"""
+        from agentwatch.decorators import with_cache
+        
+        call_count = [0]
+        
+        @with_cache(max_size=10, ttl_seconds=60)
+        def cached_func(arg):
+            call_count[0] += 1
+            return f"result_{arg}"
+        
+        result = cached_func("test")
+        assert result == "result_test"
+        assert call_count[0] == 1
+    
+    def test_with_cache_sync_cached_call(self):
+        """Test cache decorator on cached sync call"""
+        from agentwatch.decorators import with_cache
+        
+        call_count = [0]
+        
+        @with_cache(max_size=10, ttl_seconds=60)
+        def cached_func(arg):
+            call_count[0] += 1
+            return f"result_{arg}"
+        
+        # First call
+        result1 = cached_func("test")
+        assert call_count[0] == 1
+        
+        # Second call should return cached
+        result2 = cached_func("test")
+        assert result2 == "result_test"
+        assert call_count[0] == 1  # Still 1, cached
+    
+    def test_with_cache_sync_different_args(self):
+        """Test cache decorator with different args"""
+        from agentwatch.decorators import with_cache
+        
+        call_count = [0]
+        
+        @with_cache(max_size=10, ttl_seconds=60)
+        def cached_func(arg):
+            call_count[0] += 1
+            return f"result_{arg}"
+        
+        result1 = cached_func("test1")
+        result2 = cached_func("test2")
+        
+        assert result1 == "result_test1"
+        assert result2 == "result_test2"
+        assert call_count[0] == 2  # Both calls executed
+    
+    @pytest.mark.asyncio
+    async def test_with_cache_async(self):
+        """Test cache decorator on async call"""
+        from agentwatch.decorators import with_cache
+        
+        call_count = [0]
+        
+        @with_cache(max_size=10, ttl_seconds=60)
+        async def async_cached_func(arg):
+            call_count[0] += 1
+            await asyncio.sleep(0.01)
+            return f"async_result_{arg}"
+        
+        # First call
+        result1 = await async_cached_func("test")
+        assert call_count[0] == 1
+        
+        # Second call should return cached
+        result2 = await async_cached_func("test")
+        assert result2 == "async_result_test"
+        assert call_count[0] == 1  # Still 1, cached

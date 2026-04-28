@@ -787,6 +787,232 @@ def traced_llm_call(
     return decorator
 
 
+# ==================== 超时装饰器 ====================
+
+
+class TimeoutError(Exception):
+    """LLM 调用超时异常"""
+    pass
+
+
+def with_timeout(
+    seconds: float = 30.0,
+    on_timeout: Optional[Callable[[], Any]] = None,
+):
+    """
+    超时装饰器 - 自动限制 LLM 调用的执行时间
+    
+    使用示例:
+        @with_timeout(seconds=10.0)
+        @trace_agent("my_agent", model="gpt-4o")
+        def call_gpt(prompt: str):
+            return openai.chat.completions.create(...)
+        
+        # 如果超过10秒，会抛出 TimeoutError
+        try:
+            result = call_gpt("Hello")
+        except TimeoutError:
+            print("LLM call timed out!")
+    
+    Args:
+        seconds: 超时时间（秒）
+        on_timeout: 超时时的回调函数，可以返回默认值
+    
+    Returns:
+        装饰后的函数，超时时抛出 TimeoutError 或调用回调
+    """
+    
+    def decorator(func: Callable) -> Callable:
+        is_async = asyncio.iscoroutinefunction(func)
+        
+        if is_async:
+            @functools.wraps(func)
+            async def async_wrapper(*args, **kwargs) -> Any:
+                try:
+                    return await asyncio.wait_for(
+                        func(*args, **kwargs),
+                        timeout=seconds
+                    )
+                except asyncio.TimeoutError:
+                    if on_timeout:
+                        return on_timeout()
+                    raise TimeoutError(
+                        f"LLM call timed out after {seconds} seconds"
+                    )
+            
+            return async_wrapper
+        else:
+            @functools.wraps(func)
+            def sync_wrapper(*args, **kwargs) -> Any:
+                import threading
+                import queue
+                
+                result_queue = queue.Queue()
+                exception_queue = queue.Queue()
+                
+                def worker():
+                    try:
+                        result = func(*args, **kwargs)
+                        result_queue.put(result)
+                    except Exception as e:
+                        exception_queue.put(e)
+                
+                thread = threading.Thread(target=worker)
+                thread.start()
+                thread.join(timeout=seconds)
+                
+                if thread.is_alive():
+                    # Thread is still running, it timed out
+                    if on_timeout:
+                        return on_timeout()
+                    raise TimeoutError(
+                        f"LLM call timed out after {seconds} seconds"
+                    )
+                
+                # Check for exceptions
+                if not exception_queue.empty():
+                    raise exception_queue.get()
+                
+                # Get result
+                return result_queue.get()
+            
+            return sync_wrapper
+    
+    return decorator
+
+
+# ==================== 缓存装饰器 ====================
+
+
+class ResponseCache:
+    """
+    LLM 响应缓存
+    
+    用于缓存重复的 LLM 调用，节省成本和时间
+    """
+    
+    def __init__(self, max_size: int = 1000, ttl_seconds: float = 3600):
+        self.max_size = max_size
+        self.ttl_seconds = ttl_seconds
+        self._cache: dict = {}
+        self._timestamps: dict = {}
+    
+    def _hash_key(self, args: tuple, kwargs: dict) -> str:
+        """生成缓存键"""
+        import hashlib
+        key_data = str(args) + str(sorted(kwargs.items()))
+        return hashlib.md5(key_data.encode()).hexdigest()
+    
+    def get(self, args: tuple, kwargs: dict) -> Optional[Any]:
+        """获取缓存"""
+        import time
+        key = self._hash_key(args, kwargs)
+        
+        if key in self._cache:
+            # Check TTL
+            if time.time() - self._timestamps[key] < self.ttl_seconds:
+                return self._cache[key]
+            else:
+                # Expired, remove
+                del self._cache[key]
+                del self._timestamps[key]
+        
+        return None
+    
+    def set(self, args: tuple, kwargs: dict, result: Any) -> None:
+        """设置缓存"""
+        import time
+        key = self._hash_key(args, kwargs)
+        
+        # Evict old entries if at max size
+        if len(self._cache) >= self.max_size:
+            oldest_key = min(self._timestamps.keys(), key=self._timestamps.get)
+            del self._cache[oldest_key]
+            del self._timestamps[oldest_key]
+        
+        self._cache[key] = result
+        self._timestamps[key] = time.time()
+    
+    def clear(self) -> None:
+        """清空缓存"""
+        self._cache.clear()
+        self._timestamps.clear()
+    
+    def stats(self) -> dict:
+        """获取缓存统计"""
+        return {
+            "size": len(self._cache),
+            "max_size": self.max_size,
+            "ttl_seconds": self.ttl_seconds,
+        }
+
+
+def with_cache(
+    max_size: int = 1000,
+    ttl_seconds: float = 3600,
+    cache_key_func: Optional[Callable] = None,
+):
+    """
+    缓存装饰器 - 缓存 LLM 响应，避免重复调用
+    
+    使用示例:
+        @with_cache(max_size=100, ttl_seconds=300)
+        @trace_agent("my_agent", model="gpt-4o")
+        def call_gpt(prompt: str):
+            return openai.chat.completions.create(...)
+        
+        # 第一次调用会执行
+        result1 = call_gpt("What is AI?")
+        
+        # 5分钟内第二次相同调用会返回缓存
+        result2 = call_gpt("What is AI?")  # 立即返回，不消耗 tokens
+    
+    Args:
+        max_size: 最大缓存数量
+        ttl_seconds: 缓存过期时间（秒）
+        cache_key_func: 自定义缓存键生成函数
+    
+    Returns:
+        装饰后的函数，支持缓存
+    """
+    
+    cache = ResponseCache(max_size, ttl_seconds)
+    
+    def decorator(func: Callable) -> Callable:
+        is_async = asyncio.iscoroutinefunction(func)
+        
+        if is_async:
+            @functools.wraps(func)
+            async def async_wrapper(*args, **kwargs) -> Any:
+                # Check cache
+                cached = cache.get(args, kwargs)
+                if cached is not None:
+                    return cached
+                
+                # Execute and cache
+                result = await func(*args, **kwargs)
+                cache.set(args, kwargs, result)
+                return result
+            
+            return async_wrapper
+        else:
+            @functools.wraps(func)
+            def sync_wrapper(*args, **kwargs) -> Any:
+                # Check cache
+                cached = cache.get(args, kwargs)
+                if cached is not None:
+                    return cached
+                
+                # Execute and cache
+                result = func(*args, **kwargs)
+                cache.set(args, kwargs, result)
+                return result
+            
+            return sync_wrapper
+    
+    return decorator
+
+
 # ==================== 导出所有装饰器 ====================
 
 __all__ = [
@@ -805,4 +1031,8 @@ __all__ = [
     "with_rate_limit",
     "RateLimiter",
     "traced_llm_call",
+    "with_timeout",
+    "TimeoutError",
+    "with_cache",
+    "ResponseCache",
 ]
