@@ -164,6 +164,11 @@
   - 实时活动Feed
   - Token使用热力图
 - **2026-04-28**: Week 2 测试覆盖率100% 🎉
+- **2026-04-28**: 新增9个ConnectionManager WebSocket单元测试（mock-based）
+- **2026-04-28**: Charts组件新增MetricsSelector交互式指标切换
+- **2026-04-28**: API.md添加完整WebSocket API文档（140+行）
+- **2026-04-28**: Backend测试增至37个（28原 + 9 WebSocket）✅
+- **2026-04-28**: CI全部通过，版本更新至0.3.0 🎉
 
 ---
 
