@@ -427,3 +427,154 @@ class TestWebSocket:
             # Should receive broadcast
             data = websocket.receive_json()
             assert data["type"] == "trace_created"
+
+
+class TestConnectionManager:
+    """ConnectionManager unit tests - no live WebSocket needed"""
+
+    def test_connection_manager_init(self):
+        """Test ConnectionManager initialization"""
+        from main import ConnectionManager
+        manager = ConnectionManager()
+        assert manager.active_connections == []
+        assert hasattr(manager, '_lock')
+
+    def test_connection_manager_connect(self):
+        """Test ConnectionManager connect method"""
+        from main import ConnectionManager
+        from unittest.mock import AsyncMock, MagicMock
+        
+        manager = ConnectionManager()
+        mock_ws = MagicMock()
+        mock_ws.accept = AsyncMock()
+        
+        # Run async connect in sync test context
+        import asyncio
+        asyncio.run(manager.connect(mock_ws))
+        
+        assert mock_ws in manager.active_connections
+        assert len(manager.active_connections) == 1
+
+    def test_connection_manager_disconnect(self):
+        """Test ConnectionManager disconnect method"""
+        from main import ConnectionManager
+        from unittest.mock import AsyncMock, MagicMock
+        
+        manager = ConnectionManager()
+        mock_ws = MagicMock()
+        mock_ws.accept = AsyncMock()
+        
+        import asyncio
+        asyncio.run(manager.connect(mock_ws))
+        asyncio.run(manager.disconnect(mock_ws))
+        
+        assert mock_ws not in manager.active_connections
+        assert len(manager.active_connections) == 0
+
+    def test_connection_manager_disconnect_not_in_list(self):
+        """Test ConnectionManager disconnect when not in list"""
+        from main import ConnectionManager
+        from unittest.mock import MagicMock
+        
+        manager = ConnectionManager()
+        mock_ws = MagicMock()
+        
+        import asyncio
+        # Disconnect should not raise error if not in list
+        asyncio.run(manager.disconnect(mock_ws))
+        assert len(manager.active_connections) == 0
+
+    def test_connection_manager_send_to_success(self):
+        """Test ConnectionManager send_to method"""
+        from main import ConnectionManager
+        from unittest.mock import AsyncMock, MagicMock
+        
+        manager = ConnectionManager()
+        mock_ws = MagicMock()
+        mock_ws.accept = AsyncMock()
+        mock_ws.send_json = AsyncMock()
+        
+        import asyncio
+        asyncio.run(manager.connect(mock_ws))
+        asyncio.run(manager.send_to(mock_ws, {"type": "test", "data": "hello"}))
+        
+        mock_ws.send_json.assert_called_once_with({"type": "test", "data": "hello"})
+
+    def test_connection_manager_send_to_failure_disconnects(self):
+        """Test ConnectionManager send_to disconnects on failure"""
+        from main import ConnectionManager
+        from unittest.mock import AsyncMock, MagicMock
+        
+        manager = ConnectionManager()
+        mock_ws = MagicMock()
+        mock_ws.accept = AsyncMock()
+        mock_ws.send_json = AsyncMock(side_effect=Exception("Connection lost"))
+        
+        import asyncio
+        asyncio.run(manager.connect(mock_ws))
+        asyncio.run(manager.send_to(mock_ws, {"type": "test"}))
+        
+        # Should have disconnected due to error
+        assert mock_ws not in manager.active_connections
+
+    def test_connection_manager_broadcast_empty(self):
+        """Test ConnectionManager broadcast with no connections"""
+        from main import ConnectionManager
+        
+        manager = ConnectionManager()
+        
+        import asyncio
+        # Should return immediately with no connections
+        asyncio.run(manager.broadcast({"type": "test"}))
+        
+        assert len(manager.active_connections) == 0
+
+    def test_connection_manager_broadcast_multiple(self):
+        """Test ConnectionManager broadcast to multiple connections"""
+        from main import ConnectionManager
+        from unittest.mock import AsyncMock, MagicMock
+        
+        manager = ConnectionManager()
+        
+        mock_ws1 = MagicMock()
+        mock_ws1.accept = AsyncMock()
+        mock_ws1.send_json = AsyncMock()
+        
+        mock_ws2 = MagicMock()
+        mock_ws2.accept = AsyncMock()
+        mock_ws2.send_json = AsyncMock()
+        
+        import asyncio
+        asyncio.run(manager.connect(mock_ws1))
+        asyncio.run(manager.connect(mock_ws2))
+        
+        message = {"type": "broadcast", "data": "hello all"}
+        asyncio.run(manager.broadcast(message))
+        
+        mock_ws1.send_json.assert_called_once_with(message)
+        mock_ws2.send_json.assert_called_once_with(message)
+
+    def test_connection_manager_broadcast_removes_failed(self):
+        """Test ConnectionManager broadcast removes failed connections"""
+        from main import ConnectionManager
+        from unittest.mock import AsyncMock, MagicMock
+        
+        manager = ConnectionManager()
+        
+        mock_ws1 = MagicMock()
+        mock_ws1.accept = AsyncMock()
+        mock_ws1.send_json = AsyncMock(side_effect=Exception("Failed"))
+        
+        mock_ws2 = MagicMock()
+        mock_ws2.accept = AsyncMock()
+        mock_ws2.send_json = AsyncMock()
+        
+        import asyncio
+        asyncio.run(manager.connect(mock_ws1))
+        asyncio.run(manager.connect(mock_ws2))
+        
+        asyncio.run(manager.broadcast({"type": "test"}))
+        
+        # Failed connection should be removed
+        assert mock_ws1 not in manager.active_connections
+        assert mock_ws2 in manager.active_connections

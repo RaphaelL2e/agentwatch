@@ -3,8 +3,8 @@
 ## 基础信息
 
 - **Base URL**: `http://localhost:8000`
-- **版本**: v0.2.0
-- **协议**: HTTP/REST (WebSocket 支持 Coming Soon)
+- **版本**: v0.3.0
+- **协议**: HTTP/REST + WebSocket (实时推送)
 
 ---
 
@@ -319,6 +319,145 @@
     }
   ]
 }
+```
+
+---
+
+## WebSocket 实时推送 API
+
+### WebSocket 连接
+
+**Endpoint**: `ws://localhost:8000/ws`
+
+WebSocket 连接用于实时接收 Trace 创建、更新、删除等事件推送。
+
+**连接示例（JavaScript）:**
+```javascript
+const ws = new WebSocket('ws://localhost:8000/ws');
+
+ws.onopen = () => {
+  console.log('Connected to AgentWatch WebSocket');
+  // 订阅特定频道
+  ws.send(JSON.stringify({ type: 'subscribe', channels: ['all'] }));
+};
+
+ws.onmessage = (event) => {
+  const data = JSON.parse(event.data);
+  console.log('Received:', data);
+  
+  switch (data.type) {
+    case 'trace_created':
+      // 新 Trace 创建
+      console.log('New trace:', data.data);
+      break;
+    case 'trace_updated':
+      // Trace 更新
+      console.log('Trace updated:', data.data);
+      break;
+    case 'trace_deleted':
+      // Trace 删除
+      console.log('Trace deleted:', data.data.trace_id);
+      break;
+    case 'stats_update':
+      // 统计数据更新
+      console.log('Stats:', data.data);
+      break;
+  }
+};
+
+ws.onerror = (error) => {
+  console.error('WebSocket error:', error);
+};
+
+ws.onclose = () => {
+  console.log('WebSocket disconnected');
+};
+```
+
+---
+
+### WebSocket 消息类型
+
+#### 服务器推送消息
+
+| 类型 | 说明 | 数据结构 |
+|------|------|----------|
+| `connected` | 连接成功 | `{ type: "connected", message: string, timestamp: string }` |
+| `stats_update` | 统计更新 | `{ type: "stats_update", data: StatsObject, timestamp: string }` |
+| `trace_created` | Trace 创建 | `{ type: "trace_created", data: TraceObject, timestamp: string }` |
+| `trace_updated` | Trace 更新 | `{ type: "trace_updated", data: TraceObject, timestamp: string }` |
+| `trace_deleted` | Trace 删除 | `{ type: "trace_deleted", data: { trace_id: string }, timestamp: string }` |
+| `trace_event` | Trace 事件添加 | `{ type: "trace_event", data: { trace_id, event, trace }, timestamp }` |
+| `pong` | 心跳响应 | `{ type: "pong", timestamp: string }` |
+| `subscribed` | 订阅确认 | `{ type: "subscribed", channels: string[], timestamp: string }` |
+
+---
+
+#### 客户端发送消息
+
+| 类型 | 说明 | 数据结构 |
+|------|------|----------|
+| `ping` | 心跳请求 | `{ type: "ping" }` |
+| `get_stats` | 请求统计数据 | `{ type: "get_stats" }` |
+| `subscribe` | 订阅频道 | `{ type: "subscribe", channels: ["all"] }` |
+
+---
+
+### React Hook 使用示例
+
+```typescript
+import { useWebSocket } from './hooks/useWebSocket';
+
+function Dashboard() {
+  const { isConnected, lastMessage, requestStats } = useWebSocket({
+    autoConnect: true,
+    onTraceCreated: (trace) => {
+      console.log('New trace created:', trace);
+      // 更新 UI
+    },
+    onStatsUpdate: (stats) => {
+      console.log('Stats updated:', stats);
+      // 更新统计显示
+    },
+    onError: (error) => {
+      console.error('WebSocket error:', error);
+    },
+  });
+
+  return (
+    <div>
+      <span className={isConnected ? 'text-green' : 'text-red'}>
+        {isConnected ? 'Live' : 'Offline'}
+      </span>
+      <button onClick={requestStats}>Refresh Stats</button>
+    </div>
+  );
+}
+```
+
+---
+
+### Python SDK WebSocket 支持
+
+```python
+from agentwatch import AgentWatch, WebSocketClient
+
+# WebSocket 客户端
+ws_client = WebSocketClient('ws://localhost:8000/ws')
+
+# 连接并订阅
+ws_client.connect()
+
+# 接收实时消息
+for message in ws_client.listen():
+    if message['type'] == 'trace_created':
+        print(f"New trace: {message['data']['trace_id']}")
+    elif message['type'] == 'stats_update':
+        print(f"Stats: {message['data']}")
+
+# 发送消息
+ws_client.send({'type': 'ping'})
+ws_client.close()
 ```
 
 ---

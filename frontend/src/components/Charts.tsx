@@ -1,7 +1,92 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { api } from '../api';
-import { TrendingUp, Activity, Zap, PieChart as PieChartIcon } from 'lucide-react';
+import { TrendingUp, Activity, Zap, PieChart as PieChartIcon, BarChart2, ToggleLeft, ToggleRight } from 'lucide-react';
+
+// Metrics selector component
+function MetricsSelector({ selectedMetric, onMetricChange }: {
+  selectedMetric: 'traces' | 'cost' | 'tokens' | 'latency';
+  onMetricChange: (metric: 'traces' | 'cost' | 'tokens' | 'latency') => void;
+}) {
+  const metrics = [
+    { key: 'traces', label: 'Traces', icon: <Activity className="w-4 h-4" /> },
+    { key: 'cost', label: 'Cost', icon: <TrendingUp className="w-4 h-4" /> },
+    { key: 'tokens', label: 'Tokens', icon: <Zap className="w-4 h-4" /> },
+    { key: 'latency', label: 'Latency', icon: <BarChart2 className="w-4 h-4" /> },
+  ];
+
+  return (
+    <div className="flex gap-2 mb-4">
+      {metrics.map((metric) => (
+        <button
+          key={metric.key}
+          onClick={() => onMetricChange(metric.key as typeof selectedMetric)}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
+            selectedMetric === metric.key
+              ? 'bg-blue-600 text-white shadow-lg'
+              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+          }`}
+        >
+          {metric.icon}
+          <span>{metric.label}</span>
+          {selectedMetric === metric.key ? (
+            <ToggleRight className="w-4 h-4 text-blue-300" />
+          ) : (
+            <ToggleLeft className="w-4 h-4 text-gray-500" />
+          )}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// Enhanced bar chart with metric selection
+function MetricBarChart({ data, metric, title }: {
+  data: ChartData[];
+  metric: 'traces' | 'cost' | 'tokens';
+  title: string;
+}) {
+  if (data.length === 0) return null;
+  
+  const maxValue = Math.max(...data.map(d => d[metric] as number), 1);
+  
+  const formatValue = (value: number, m: string) => {
+    if (m === 'cost') return `$${value.toFixed(4)}`;
+    if (m === 'tokens') return value.toLocaleString();
+    return value.toString();
+  };
+
+  return (
+    <div className="mb-8 p-6 bg-gray-800 rounded-lg">
+      <h2 className="text-lg font-semibold mb-4">{title}</h2>
+      <div className="flex items-end gap-4 h-64">
+        {data.map((item) => {
+          const value = item[metric] as number;
+          const height = (value / maxValue) * 200;
+          return (
+            <div key={item.provider} className="flex-1 flex flex-col items-center group">
+              <div
+                className="w-full rounded-t transition-all duration-300 hover:opacity-80 cursor-pointer"
+                style={{
+                  height: `${Math.max(height, 4)}px`,
+                  backgroundColor: item.color,
+                  minHeight: '20px',
+                }}
+              >
+                <div className="group-hover:block hidden text-center pt-2 text-xs font-bold">
+                  {formatValue(value, metric)}
+                </div>
+              </div>
+              <p className="mt-2 text-sm text-gray-400">{item.provider}</p>
+              <p className="text-lg font-bold">{formatValue(value, metric)}</p>
+              <p className="text-xs text-gray-500">{item.traces} traces</p>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 interface ChartData {
   provider: string;
@@ -165,6 +250,7 @@ function TokenHeatmap({ timelineData }: { timelineData: TimelinePoint[] }) {
 
 export default function Charts() {
   const [timeRange, setTimeRange] = useState(24);
+  const [selectedMetric, setSelectedMetric] = useState<'traces' | 'cost' | 'tokens' | 'latency'>('cost');
   
   const { data: stats } = useQuery({
     queryKey: ['stats'],
@@ -318,6 +404,30 @@ export default function Charts() {
           </>
         ) : (
           <p className="text-gray-400 text-center py-4">No heatmap data available</p>
+        )}
+      </div>
+
+      {/* 新增：Metrics Selector + Interactive Bar Chart */}
+      <div className="mb-8 p-6 bg-gray-800 rounded-lg">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <BarChart2 className="w-5 h-5 text-cyan-400" />
+            <h2 className="text-lg font-semibold">Provider Comparison</h2>
+          </div>
+          <MetricsSelector 
+            selectedMetric={selectedMetric} 
+            onMetricChange={setSelectedMetric} 
+          />
+        </div>
+        
+        {chartData.length > 0 ? (
+          <MetricBarChart 
+            data={chartData} 
+            metric={selectedMetric === 'latency' ? 'cost' : selectedMetric} 
+            title={`Provider ${selectedMetric === 'latency' ? 'Cost' : selectedMetric.charAt(0).toUpperCase() + selectedMetric.slice(1)} Distribution`} 
+          />
+        ) : (
+          <p className="text-gray-400 text-center py-8">No provider data available</p>
         )}
       </div>
 
