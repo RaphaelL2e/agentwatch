@@ -180,6 +180,15 @@
 +  - storage/clickhouse.py: ClickHouse 存储骨架
 +  - trace_service.py 重构为依赖注入模式
 +  - 未来可扩展: PostgreSQL/MongoDB/SQLite 等
++- **2026-04-28**: FastAPI 弃用警告修复（lifespan handlers）
++- **2026-04-28**: Budget Tracking API 新增（4个端点）
++  - GET /api/v1/budget: 获取预算配置和状态
++  - PUT /api/v1/budget: 更新预算配置
++  - GET /api/v1/budget/history: 预算历史分析
++  - GET /api/v1/budget/providers: Provider 成本状态和建议
++- **2026-04-28**: Backend 测试增至 44 个（新增 7 个 Budget API 测试）
++- **2026-04-28**: API 文档更新（Budget API 章节）
++- **2026-04-28**: 版本升级至 0.4.0 🎉
 
 ---
 

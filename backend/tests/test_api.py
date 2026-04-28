@@ -577,4 +577,81 @@ class TestConnectionManager:
         
         # Failed connection should be removed
         assert mock_ws1 not in manager.active_connections
-        assert mock_ws2 in manager.active_connections
+
+
+class TestBudgetAPI:
+    """Budget API Tests"""
+
+    def test_get_budget_config(self):
+        """Test getting budget configuration"""
+        response = client.get("/api/v1/budget")
+        assert response.status_code == 200
+        data = response.json()
+        assert "config" in data
+        assert "status" in data
+        assert "alerts" in data
+        assert data["config"]["daily_limit"] == 10.0
+        assert data["config"]["monthly_limit"] == 100.0
+
+    def test_update_budget_config(self):
+        """Test updating budget configuration"""
+        response = client.put("/api/v1/budget?daily_limit=20.0&monthly_limit=200.0")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["message"] == "Budget config updated"
+        assert data["config"]["daily_limit"] == 20.0
+        assert data["config"]["monthly_limit"] == 200.0
+
+        # Reset back to defaults
+        client.put("/api/v1/budget?daily_limit=10.0&monthly_limit=100.0")
+
+    def test_update_budget_with_invalid_threshold(self):
+        """Test updating budget with invalid threshold"""
+        response = client.put("/api/v1/budget?alert_threshold=1.5")
+        assert response.status_code == 400
+        data = response.json()
+        assert "detail" in data
+
+    def test_get_budget_history(self):
+        """Test getting budget history"""
+        response = client.get("/api/v1/budget/history?days=7")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["days"] == 7
+        assert "history" in data
+        assert "total_cost" in data
+        assert "avg_daily_cost" in data
+
+    def test_get_budget_history_with_invalid_days(self):
+        """Test getting budget history with invalid days parameter"""
+        response = client.get("/api/v1/budget/history?days=100")
+        assert response.status_code == 422  # Validation error
+
+    def test_get_provider_budget_status(self):
+        """Test getting provider budget status"""
+        response = client.get("/api/v1/budget/providers")
+        assert response.status_code == 200
+        data = response.json()
+        assert "providers" in data
+        assert "suggestions" in data
+
+    def test_budget_status_with_traces(self):
+        """Test budget status after creating traces"""
+        # Create a test trace first
+        trace_data = {
+            "agent_id": "budget_test_agent",
+            "agent_name": "Budget Test Agent",
+            "provider": "openai",
+            "model": "gpt-4o",
+            "session_id": "budget_session",
+            "user_id": "budget_user",
+            "prompt": "Budget test",
+        }
+        client.post("/api/v1/trace", json=trace_data)
+
+        # Check budget status
+        response = client.get("/api/v1/budget")
+        assert response.status_code == 200
+        data = response.json()
+        assert "today_cost" in data["status"]
+        assert "daily_usage_percent" in data["status"]

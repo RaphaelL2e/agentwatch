@@ -13,6 +13,8 @@ from collections import defaultdict
 from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
+from contextlib import asynccontextmanager
+
 from models import (
     TraceCreate,
     TraceUpdate,
@@ -29,12 +31,28 @@ from trace_service import TraceService
 # 启动时间
 START_TIME = time.time()
 
+
+# Lifespan handler for startup/shutdown events
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan handler"""
+    # Startup
+    print("🚀 AgentWatch Backend started!")
+    print("   Version: 0.4.0")
+    print("   Docs: http://localhost:8000/docs")
+    print("   WebSocket: ws://localhost:8000/ws")
+    yield
+    # Shutdown
+    print("👋 AgentWatch Backend shutting down...")
+
+
 app = FastAPI(
     title="AgentWatch",
     description="AI Agent Security Monitoring Platform - Track, Debug, and Optimize Your AI Agents",
-    version="0.3.0",
+    version="0.4.0",
     docs_url="/docs",
     redoc_url="/redoc",
+    lifespan=lifespan,
 )
 
 # CORS配置
@@ -109,7 +127,7 @@ async def root():
     """API根路径"""
     return {
         "message": "AgentWatch API",
-        "version": "0.3.0",
+        "version": "0.4.0",
         "docs": "/docs",
         "status": "running",
         "websocket": "/ws",
@@ -122,7 +140,7 @@ async def health():
     stats = TraceService.get_stats()
     return HealthCheck(
         status="healthy",
-        version="0.3.0",
+        version="0.4.0",
         uptime_seconds=time.time() - START_TIME,
         database_connected=True,  # 内存存储总是连接
         traces_count=stats["total_traces"],
@@ -479,6 +497,185 @@ async def get_provider_analytics():
     return result
 
 
+# ==================== Budget Tracking API ====================
+
+# In-memory budget storage (in production, use database)
+budget_config: dict = {
+    "daily_limit": 10.0,  # $10 daily budget
+    "monthly_limit": 100.0,  # $100 monthly budget
+    "alert_threshold": 0.8,  # 80% alert threshold
+    "providers_limits": {},  # Per-provider limits
+}
+
+
+@app.get("/api/v1/budget", tags=["Budget"])
+async def get_budget_config():
+    """
+    获取预算配置
+    
+    返回当前的预算限制和告警阈值
+    """
+    stats = TraceService.get_stats()
+    
+    # Calculate current spending
+    today_cost = stats.get("today_cost", 0.0)
+    month_cost = stats.get("month_cost", 0.0)
+    
+    # Calculate budget status
+    daily_usage_percent = (today_cost / budget_config["daily_limit"]) * 100 if budget_config["daily_limit"] > 0 else 0
+    monthly_usage_percent = (month_cost / budget_config["monthly_limit"]) * 100 if budget_config["monthly_limit"] > 0 else 0
+    
+    # Determine alert status
+    alerts = []
+    if daily_usage_percent >= budget_config["alert_threshold"] * 100:
+        alerts.append({
+            "type": "daily_budget",
+            "severity": "warning" if daily_usage_percent < 100 else "critical",
+            "message": f"Daily budget {daily_usage_percent:.1f}% used",
+            "current": today_cost,
+            "limit": budget_config["daily_limit"],
+        })
+    if monthly_usage_percent >= budget_config["alert_threshold"] * 100:
+        alerts.append({
+            "type": "monthly_budget",
+            "severity": "warning" if monthly_usage_percent < 100 else "critical",
+            "message": f"Monthly budget {monthly_usage_percent:.1f}% used",
+            "current": month_cost,
+            "limit": budget_config["monthly_limit"],
+        })
+    
+    return {
+        "config": budget_config,
+        "status": {
+            "today_cost": today_cost,
+            "month_cost": month_cost,
+            "daily_usage_percent": round(daily_usage_percent, 2),
+            "monthly_usage_percent": round(monthly_usage_percent, 2),
+            "daily_remaining": round(budget_config["daily_limit"] - today_cost, 4),
+            "monthly_remaining": round(budget_config["monthly_limit"] - month_cost, 4),
+            "daily_over_budget": today_cost > budget_config["daily_limit"],
+            "monthly_over_budget": month_cost > budget_config["monthly_limit"],
+        },
+        "alerts": alerts,
+    }
+
+
+@app.put("/api/v1/budget", tags=["Budget"])
+async def update_budget_config(
+    daily_limit: Optional[float] = Query(None, description="Daily budget limit in $"),
+    monthly_limit: Optional[float] = Query(None, description="Monthly budget limit in $"),
+    alert_threshold: Optional[float] = Query(None, description="Alert threshold (0-1)"),
+):
+    """
+    更新预算配置
+    
+    - **daily_limit**: 每日预算限制 ($)
+    - **monthly_limit**: 每月预算限制 ($)
+    - **alert_threshold**: 告警阈值 (0-1, 如 0.8 表示 80%)
+    """
+    if daily_limit is not None:
+        budget_config["daily_limit"] = daily_limit
+    if monthly_limit is not None:
+        budget_config["monthly_limit"] = monthly_limit
+    if alert_threshold is not None:
+        if alert_threshold < 0 or alert_threshold > 1:
+            raise HTTPException(status_code=400, detail="alert_threshold must be between 0 and 1")
+        budget_config["alert_threshold"] = alert_threshold
+    
+    return {"message": "Budget config updated", "config": budget_config}
+
+
+@app.get("/api/v1/budget/history", tags=["Budget"])
+async def get_budget_history(days: int = Query(7, ge=1, le=30, description="Number of days to analyze")):
+    """
+    获取预算历史
+    
+    返回过去 N 天的每日成本统计
+    """
+    traces = TraceService.list_traces(page=1, page_size=10000)
+    
+    # Group by day
+    daily_costs = defaultdict(float)
+    daily_traces = defaultdict(int)
+    
+    for trace in traces.traces:
+        if trace.created_at:
+            day_key = trace.created_at.strftime("%Y-%m-%d")
+            daily_costs[day_key] += trace.total_cost or 0
+            daily_traces[day_key] += 1
+    
+    # Build history
+    history = []
+    for day, cost in sorted(daily_costs.items(), reverse=True)[:days]:
+        history.append({
+            "date": day,
+            "cost": round(cost, 6),
+            "traces": daily_traces[day],
+            "over_budget": cost > budget_config["daily_limit"],
+        })
+    
+    return {
+        "days": days,
+        "daily_limit": budget_config["daily_limit"],
+        "history": history,
+        "total_cost": round(sum(d["cost"] for d in history), 4),
+        "avg_daily_cost": round(sum(d["cost"] for d in history) / len(history), 4) if history else 0,
+    }
+
+
+@app.get("/api/v1/budget/providers", tags=["Budget"])
+async def get_provider_budget_status():
+    """
+    获取各 Provider 的预算状态
+    
+    返回每个 Provider 的成本分布和建议
+    """
+    traces = TraceService.list_traces(page=1, page_size=10000)
+    
+    provider_costs = defaultdict(float)
+    provider_traces = defaultdict(int)
+    
+    for trace in traces.traces:
+        provider_costs[str(trace.provider)] += trace.total_cost or 0
+        provider_traces[str(trace.provider)] += 1
+    
+    # DeepSeek savings calculation (DeepSeek is ~107x cheaper than GPT-4)
+    DEEPSEEK_SAVINGS_FACTOR = 107
+    
+    suggestions = []
+    total_openai_cost = provider_costs.get("openai", 0)
+    total_deepseek_cost = provider_costs.get("deepseek", 0)
+    
+    if total_openai_cost > 0 and total_deepseek_cost == 0:
+        potential_savings = total_openai_cost - total_openai_cost / DEEPSEEK_SAVINGS_FACTOR
+        suggestions.append({
+            "type": "switch_provider",
+            "from": "openai",
+            "to": "deepseek",
+            "current_cost": round(total_openai_cost, 4),
+            "potential_cost": round(total_openai_cost / DEEPSEEK_SAVINGS_FACTOR, 6),
+            "savings": round(potential_savings, 4),
+            "savings_percent": 99.1,  # ~99% savings
+        })
+    
+    # Build provider status
+    providers = []
+    for provider, cost in provider_costs.items():
+        provider_limit = budget_config["providers_limits"].get(provider, budget_config["monthly_limit"])
+        providers.append({
+            "provider": provider,
+            "cost": round(cost, 6),
+            "traces": provider_traces[provider],
+            "limit": provider_limit,
+            "usage_percent": round((cost / provider_limit) * 100, 2) if provider_limit > 0 else 0,
+        })
+    
+    return {
+        "providers": sorted(providers, key=lambda x: x["cost"], reverse=True),
+        "suggestions": suggestions,
+    }
+
+
 # ==================== WebSocket 端点 ====================
 
 
@@ -607,24 +804,6 @@ async def create_test_trace():
     })
     
     return final_trace
-
-
-# ==================== 启动事件 ====================
-
-
-@app.on_event("startup")
-async def startup_event():
-    """启动事件"""
-    print("🚀 AgentWatch Backend started!")
-    print("   Version: 0.3.0")
-    print("   Docs: http://localhost:8000/docs")
-    print("   WebSocket: ws://localhost:8000/ws")
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """关闭事件"""
-    print("👋 AgentWatch Backend shutting down...")
 
 
 # 开发运行: uvicorn main:app --reload --port 8000

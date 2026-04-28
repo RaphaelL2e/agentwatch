@@ -3,7 +3,7 @@
 ## 基础信息
 
 - **Base URL**: `http://localhost:8000`
-- **版本**: v0.3.0
+- **版本**: v0.4.0
 - **协议**: HTTP/REST + WebSocket (实时推送)
 
 ---
@@ -316,6 +316,145 @@
       "hour": "2026-04-27T03:00:00Z",
       "traces": 10,
       "cost": 0.5
+    }
+  ]
+}
+```
+
+---
+
+## Budget API
+
+### GET /api/v1/budget
+
+获取预算配置和当前状态。
+
+**Response:**
+```json
+{
+  "config": {
+    "daily_limit": 10.0,
+    "monthly_limit": 100.0,
+    "alert_threshold": 0.8,
+    "providers_limits": {}
+  },
+  "status": {
+    "today_cost": 2.5,
+    "month_cost": 25.0,
+    "daily_usage_percent": 25.0,
+    "monthly_usage_percent": 25.0,
+    "daily_remaining": 7.5,
+    "monthly_remaining": 75.0,
+    "daily_over_budget": false,
+    "monthly_over_budget": false
+  },
+  "alerts": [
+    {
+      "type": "daily_budget",
+      "severity": "warning",
+      "message": "Daily budget 80% used",
+      "current": 8.0,
+      "limit": 10.0
+    }
+  ]
+}
+```
+
+---
+
+### PUT /api/v1/budget
+
+更新预算配置。
+
+**Query Parameters:**
+- `daily_limit` (float): 每日预算限制 ($)
+- `monthly_limit` (float): 每月预算限制 ($)
+- `alert_threshold` (float): 告警阈值 (0-1)
+
+**Request Example:**
+```
+PUT /api/v1/budget?daily_limit=20.0&monthly_limit=200.0&alert_threshold=0.9
+```
+
+**Response:**
+```json
+{
+  "message": "Budget config updated",
+  "config": {
+    "daily_limit": 20.0,
+    "monthly_limit": 200.0,
+    "alert_threshold": 0.9
+  }
+}
+```
+
+---
+
+### GET /api/v1/budget/history
+
+获取预算历史（过去 N 天的每日成本）。
+
+**Query Parameters:**
+- `days` (int): 分析天数，范围 1-30，默认 7
+
+**Response:**
+```json
+{
+  "days": 7,
+  "daily_limit": 10.0,
+  "history": [
+    {
+      "date": "2026-04-28",
+      "cost": 5.25,
+      "traces": 120,
+      "over_budget": false
+    },
+    {
+      "date": "2026-04-27",
+      "cost": 12.50,
+      "traces": 300,
+      "over_budget": true
+    }
+  ],
+  "total_cost": 45.75,
+  "avg_daily_cost": 6.54
+}
+```
+
+---
+
+### GET /api/v1/budget/providers
+
+获取各 Provider 的预算状态和成本优化建议。
+
+**Response:**
+```json
+{
+  "providers": [
+    {
+      "provider": "openai",
+      "cost": 10.50,
+      "traces": 50,
+      "limit": 100.0,
+      "usage_percent": 10.5
+    },
+    {
+      "provider": "deepseek",
+      "cost": 0.10,
+      "traces": 30,
+      "limit": 100.0,
+      "usage_percent": 0.1
+    }
+  ],
+  "suggestions": [
+    {
+      "type": "switch_provider",
+      "from": "openai",
+      "to": "deepseek",
+      "current_cost": 10.50,
+      "potential_cost": 0.10,
+      "savings": 10.40,
+      "savings_percent": 99.1
     }
   ]
 }
