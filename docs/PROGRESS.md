@@ -169,6 +169,11 @@
 - **2026-04-28**: API.md添加完整WebSocket API文档（140+行）
 - **2026-04-28**: Backend测试增至37个（28原 + 9 WebSocket）✅
 - **2026-04-28**: CI全部通过，版本更新至0.3.0 🎉
+- **2026-04-28**: 新增SDK真实集成示例（Claude/DeepSeek）22KB
+  - claude_integration.py: 5个示例（基础调用、多轮对话、成本对比、代码Agent、流式响应）
+  - deepseek_integration.py: 6个示例（基础调用、vs GPT-4o对比、多轮对话、Reasoner R1、批量处理、企业Dashboard）
+  - 核心卖点展示: DeepSeek成本仅GPT-4o的1/107
+- **2026-04-28**: Week 2 功能迭代开始 🚀
 
 ---
 
