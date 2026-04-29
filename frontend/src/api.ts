@@ -5,7 +5,9 @@
 
 import axios from 'axios'
 
-const API_BASE = import.meta.env.VITE_API_URL ?? ''
+// API 请求使用相对路径，通过 nginx 代理
+// 不设置 baseURL，让 axios 使用相对路径
+const API_BASE = ''
 
 const client = axios.create({
   baseURL: API_BASE,
