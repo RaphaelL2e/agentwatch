@@ -1,10 +1,13 @@
+# 构建阶段
 FROM node:20-alpine as builder
 
 WORKDIR /app
 
+# 先复制 package.json 和 package-lock.json
+COPY package*.json ./
+
 # 安装依赖
-COPY package.json ./
-RUN npm install
+RUN npm ci --legacy-peer-deps || npm install --legacy-peer-deps
 
 # 复制源代码
 COPY . .
@@ -21,6 +24,4 @@ COPY --from=builder /app/dist /usr/share/nginx/html
 # 复制 nginx 配置
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-EXPOSE 3000
-
-CMD ["nginx", "-g", "daemon off;"]
+EXPOSE 80
