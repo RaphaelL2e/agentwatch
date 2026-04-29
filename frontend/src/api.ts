@@ -69,6 +69,19 @@ export const api = {
   
   getProviderAnalytics: () => 
     client.get('/api/v1/analytics/providers').then(r => r.data),
+  
+  // Model Cost Comparison API
+  getModelPricing: () => 
+    client.get('/api/v1/models/pricing').then(r => r.data),
+  
+  getModelComparison: (params?: { input_tokens?: number; output_tokens?: number; compare_to?: string }) => 
+    client.get('/api/v1/models/comparison', { params }).then(r => r.data),
+  
+  getModelRecommendation: (params?: { monthly_budget?: number; expected_tokens?: number }) => 
+    client.get('/api/v1/models/recommendation', { params }).then(r => r.data),
+  
+  getModelPerformance: () => 
+    client.get('/api/v1/models/performance').then(r => r.data),
 }
 
 // ==================== WebSocket 连接 ====================
