@@ -1,6 +1,6 @@
 # AgentWatch 项目演进路径
 
-**版本**: v0.7.0
+**版本**: v0.9.0
 **日期**: 2026-04-29
 **目标**: Year 1 ¥1016万/$145万 ARR
 
@@ -45,10 +45,10 @@
 
 | 功能 | 阶段 | 状态 |
 |------|------|------|
-| 团队管理 | Week 3 | ❌ |
-| 数据导出 (CSV/JSON) | Week 3 | ❌ |
+| 团队管理 | Week 3 | ✅ 已完成 |
+| 数据导出 (CSV/JSON) | Week 3 | ✅ 已完成 |
 | 首批用户获取 (HN) | Week 3 | ❌ |
-| PyPI 发布 | Week 4 | ❌ |
+| PyPI 发布 | Week 4 | ❌ (需要API Token) |
 | GitHub Marketplace | Week 4 | ❌ |
 | 生产环境部署 | Week 4 | ❌ |
 
