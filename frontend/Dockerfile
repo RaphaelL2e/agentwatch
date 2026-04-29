@@ -6,12 +6,15 @@ WORKDIR /app
 # 先复制 package.json
 COPY package*.json ./
 
-# 安装 rollup 平台依赖（解决 npm optional deps bug）
-RUN npm install --legacy-peer-deps && \
+# 安装依赖 + rollup 平台依赖
+RUN npm ci --legacy-peer-deps || npm install --legacy-peer-deps && \
     npm install @rollup/rollup-linux-x64-gnu --save-optional
 
 # 复制源代码
 COPY . .
+
+# 设置 API URL 为空（通过 nginx 代理）
+ENV VITE_API_URL=""
 
 # 构建
 RUN npm run build
