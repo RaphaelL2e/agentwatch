@@ -3,11 +3,12 @@ FROM node:20-slim as builder
 
 WORKDIR /app
 
-# 先复制 package.json 和 package-lock.json
+# 先复制 package.json
 COPY package*.json ./
 
-# 安装依赖
-RUN npm ci --legacy-peer-deps || npm install --legacy-peer-deps
+# 安装 rollup 平台依赖（解决 npm optional deps bug）
+RUN npm install --legacy-peer-deps && \
+    npm install @rollup/rollup-linux-x64-gnu --save-optional
 
 # 复制源代码
 COPY . .
