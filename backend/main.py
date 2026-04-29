@@ -47,6 +47,14 @@ except ImportError:
     TEAM_API_ENABLED=False
     team_router = None
 
+# Export API module (Phase 2 数据导出)
+try:
+    from export_api import router as export_router
+    EXPORT_API_ENABLED=True
+except ImportError:
+    EXPORT_API_ENABLED=False
+    export_router = None
+
 # 启动时间
 START_TIME = time.time()
 
@@ -97,6 +105,10 @@ if AUTH_ENABLED and auth_router:
 # 注册团队协作路由 (Phase 2)
 if TEAM_API_ENABLED and team_router:
     app.include_router(team_router)
+
+# 注册数据导出路由 (Phase 2)
+if EXPORT_API_ENABLED and export_router:
+    app.include_router(export_router)
 
 
 # ==================== WebSocket 管理 ====================
