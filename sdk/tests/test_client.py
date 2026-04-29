@@ -102,6 +102,7 @@ class TestAgentWatchRequest:
     def test_health_check_success(self, mock_client):
         """Test health check success"""
         mock_response = Mock()
+        mock_response.status_code = 200
         mock_response.json.return_value = {"status": "healthy"}
         mock_response.raise_for_status = Mock()
         mock_client.return_value.get.return_value = mock_response
@@ -114,6 +115,7 @@ class TestAgentWatchRequest:
     def test_get_stats_success(self, mock_client):
         """Test get stats success"""
         mock_response = Mock()
+        mock_response.status_code = 200
         mock_response.json.return_value = {"total_traces": 10}
         mock_response.raise_for_status = Mock()
         mock_client.return_value.get.return_value = mock_response
@@ -126,6 +128,7 @@ class TestAgentWatchRequest:
     def test_list_traces_success(self, mock_client):
         """Test list traces success"""
         mock_response = Mock()
+        mock_response.status_code = 200
         mock_response.json.return_value = {"traces": [], "total": 0}
         mock_response.raise_for_status = Mock()
         mock_client.return_value.get.return_value = mock_response
