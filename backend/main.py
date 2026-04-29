@@ -49,7 +49,7 @@ async def lifespan(app: FastAPI):
     """Application lifespan handler"""
     # Startup
     print("🚀 AgentWatch Backend started!")
-    print("   Version: 0.6.0")
+    print("   Version: 0.7.0")
     print("   Docs: http://localhost:8000/docs")
     print("   WebSocket: ws://localhost:8000/ws")
     if AUTH_ENABLED:
@@ -62,7 +62,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="AgentWatch",
     description="AI Agent Security Monitoring Platform - Track, Debug, and Optimize Your AI Agents",
-    version="0.6.0",
+    version="0.7.0",
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan,

@@ -223,6 +223,23 @@
 +  - 存储类型指示器
 +  - 30 秒自动刷新状态
 +- **2026-04-29**: Backend 测试增至 72 个（新增 28 个 Storage 测试）✅
+- **2026-04-29**: 认证系统完整实现 🎉
+  - JWT + API Key 双认证模式
+  - 用户注册、登录、注销
+  - API Key 创建、管理、验证
+  - Rate Limiting 中间件
+  - Scope-based 权限控制
+- **2026-04-29**: DeepSeek Cost Comparison API 🎯
+  - /api/v1/models/pricing - 模型定价数据
+  - /api/v1/models/comparison - 成本对比计算器
+  - /api/v1/models/recommendation - 预算推荐
+  - /api/v1/models/performance - 基准测试对比
+  - 展示 DeepSeek 107x 成本优势
+- **2026-04-29**: 前端 API 客户端新增模型对比端点
+- **2026-04-29**: SDK 测试修复（mock status_code）
+- **2026-04-29**: 72 Backend + 72 SDK 测试全部通过 ✅
+- **2026-04-29**: 版本升级至 0.7.0 🎉
+- **2026-04-29**: README Roadmap 更新（Week 3 进度）
 
 ---
 
