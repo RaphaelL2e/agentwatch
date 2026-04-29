@@ -136,7 +136,7 @@ agentwatch/
 
 ## 📈 Roadmap
 
-### Week 1 (当前) ✅
+### Week 1 ✅
 - [x] FastAPI 后端骨架
 - [x] Trace API 端点
 - [x] Python SDK
@@ -146,20 +146,23 @@ agentwatch/
 - [x] 6个前端页面 (Dashboard/TraceDetail/CostComparison/Settings/About/Charts)
 - [x] 发布文档 (Product Hunt/博客/API文档/架构文档)
 
-### Week 2
-- [ ] React Dashboard 完善
-- [ ] ClickHouse 数据存储
-- [ ] 实时数据推送（WebSocket）
+### Week 2 ✅
+- [x] React Dashboard 完善
+- [x] ClickHouse 数据存储 (SQLite持久化)
+- [x] 实时数据推送（WebSocket）
+- [x] 72个 Backend 测试 + 72个 SDK 测试
+- [x] Cost Comparison API (DeepSeek 107x 成本优势)
 
-### Week 3
-- [ ] 用户认证
+### Week 3 (当前)
+- [x] 用户认证系统 (JWT + API Key)
 - [ ] 团队管理
 - [ ] 数据导出
+- [ ] 首批用户获取 (HN Show HN)
 
 ### Week 4
 - [ ] npm CLI 发布
 - [ ] GitHub Marketplace 上架
-- [ ] 首批用户获取
+- [ ] 生产环境部署
 
 ## 🤝 贡献
 
