@@ -1,5 +1,5 @@
-# 构建阶段
-FROM node:20-alpine as builder
+# 构建阶段 - 使用 slim 避免 musl 兼容问题
+FROM node:20-slim as builder
 
 WORKDIR /app
 
