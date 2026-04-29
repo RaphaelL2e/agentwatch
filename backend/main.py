@@ -54,8 +54,13 @@ async def lifespan(app: FastAPI):
     print("   WebSocket: ws://localhost:8000/ws")
     if AUTH_ENABLED:
         print("   Auth: Enabled")
+    # 启动实时推送后台任务
+    await push_manager.start_background_push()
+    print("📡 Real-time push enabled")
     yield
     # Shutdown
+    await push_manager.stop_background_push()
+    print("📡 Real-time push disabled")
     print("👋 AgentWatch Backend shutting down...")
 
 
@@ -83,6 +88,8 @@ if AUTH_ENABLED and auth_router:
 
 
 # ==================== WebSocket 管理 ====================
+
+from realtime import RealTimePushManager, AlertConfig
 
 class ConnectionManager:
     """WebSocket 连接管理器"""
@@ -134,6 +141,18 @@ class ConnectionManager:
 
 
 manager = ConnectionManager()
+
+# 创建实时推送管理器
+push_manager = RealTimePushManager(
+    broadcast_func=manager.broadcast,
+    get_stats_func=TraceService.get_stats,
+    config=AlertConfig(
+        cost_threshold=0.10,
+        latency_threshold_ms=5000,
+        failure_rate_threshold=0.3,
+        token_threshold=100000,
+    ),
+)
 
 
 # ==================== 基础端点 ====================
@@ -188,12 +207,8 @@ async def create_trace(trace_data: TraceCreate):
     """
     trace = TraceService.create_trace(trace_data)
     
-    # 广播新 trace 事件
-    await manager.broadcast({
-        "type": "trace_created",
-        "data": trace.model_dump(),
-        "timestamp": datetime.utcnow().isoformat(),
-    })
+    # 使用实时推送管理器广播（包含预警检查）
+    await push_manager.push_trace_created(trace.model_dump())
     
     return trace
 
@@ -214,12 +229,8 @@ async def update_trace(trace_id: str, update_data: TraceUpdate):
     if not trace:
         raise HTTPException(status_code=404, detail=f"Trace {trace_id} not found")
     
-    # 广播更新事件
-    await manager.broadcast({
-        "type": "trace_updated",
-        "data": trace.model_dump(),
-        "timestamp": datetime.utcnow().isoformat(),
-    })
+    # 使用实时推送管理器广播
+    await push_manager.push_trace_updated(trace.model_dump())
     
     return trace
 
@@ -231,12 +242,8 @@ async def delete_trace(trace_id: str):
     if not success:
         raise HTTPException(status_code=404, detail=f"Trace {trace_id} not found")
     
-    # 广播删除事件
-    await manager.broadcast({
-        "type": "trace_deleted",
-        "data": {"trace_id": trace_id},
-        "timestamp": datetime.utcnow().isoformat(),
-    })
+    # 使用实时推送管理器广播
+    await push_manager.push_trace_deleted(trace_id)
     
     return {"message": f"Trace {trace_id} deleted", "success": True}
 
@@ -250,16 +257,8 @@ async def add_trace_event(trace_id: str, event: TraceEvent):
     if not trace:
         raise HTTPException(status_code=404, detail=f"Trace {trace_id} not found")
     
-    # 广播事件添加
-    await manager.broadcast({
-        "type": "trace_event",
-        "data": {
-            "trace_id": trace_id,
-            "event": event.model_dump(),
-            "trace": trace.model_dump(),
-        },
-        "timestamp": datetime.utcnow().isoformat(),
-    })
+    # 使用实时推送管理器广播
+    await push_manager.push_trace_event(trace_id, event.model_dump(), trace.model_dump())
     
     return trace
 

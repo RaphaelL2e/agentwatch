@@ -9,7 +9,7 @@ import CostComparison from './components/CostComparison'
 import CostOptimization from './components/CostOptimization'
 import Settings from './components/Settings'
 import About from './components/About'
-import Charts from './components/Charts'
+import ChartsEnhanced from './components/ChartsEnhanced'
 import Export from './components/Export'
 
 const queryClient = new QueryClient({
@@ -161,7 +161,7 @@ function App() {
             <Route path="/charts" element={
               <ProtectedRoute>
                 <MainLayout>
-                  <Charts />
+                  <ChartsEnhanced />
                 </MainLayout>
               </ProtectedRoute>
             } />
