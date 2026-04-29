@@ -82,6 +82,56 @@ export const api = {
   
   getModelPerformance: () => 
     client.get('/api/v1/models/performance').then(r => r.data),
+  
+  // Export API
+  exportTracesJson: (params?: { provider?: string; status?: string; agent_id?: string }) => 
+    client.get('/api/v1/export/traces/json', { params, responseType: 'blob' }).then(r => {
+      // Create download link
+      const url = window.URL.createObjectURL(new Blob([r.data]))
+      const link = document.createElement('a')
+      link.href = url
+      link.setAttribute('download', `agentwatch_traces_${new Date().toISOString().slice(0,19).replace(/[:-]/g,'')}.json`)
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(url)
+    }),
+  
+  exportTracesCsv: (params?: { provider?: string; status?: string; agent_id?: string }) => 
+    client.get('/api/v1/export/traces/csv', { params, responseType: 'blob' }).then(r => {
+      const url = window.URL.createObjectURL(new Blob([r.data]))
+      const link = document.createElement('a')
+      link.href = url
+      link.setAttribute('download', `agentwatch_traces_${new Date().toISOString().slice(0,19).replace(/[:-]/g,'')}.csv`)
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(url)
+    }),
+  
+  exportCostSummary: (format: 'json' | 'csv' = 'json', params?: { provider?: string }) => 
+    client.get('/api/v1/export/cost/summary', { params: { format, ...params }, responseType: 'blob' }).then(r => {
+      const url = window.URL.createObjectURL(new Blob([r.data]))
+      const link = document.createElement('a')
+      link.href = url
+      link.setAttribute('download', `agentwatch_cost_summary_${new Date().toISOString().slice(0,19).replace(/[:-]/g,'')}.${format}`)
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(url)
+    }),
+  
+  exportAnalyticsReport: (format: 'json' | 'csv' = 'json', days: number = 7) => 
+    client.get('/api/v1/export/analytics/report', { params: { format, days }, responseType: 'blob' }).then(r => {
+      const url = window.URL.createObjectURL(new Blob([r.data]))
+      const link = document.createElement('a')
+      link.href = url
+      link.setAttribute('download', `agentwatch_analytics_report_${new Date().toISOString().slice(0,19).replace(/[:-]/g,'')}.${format}`)
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(url)
+    }),
 }
 
 // ==================== WebSocket 连接 ====================

@@ -49,7 +49,7 @@ async def lifespan(app: FastAPI):
     """Application lifespan handler"""
     # Startup
     print("🚀 AgentWatch Backend started!")
-    print("   Version: 0.7.0")
+    print("   Version: 0.8.0")
     print("   Docs: http://localhost:8000/docs")
     print("   WebSocket: ws://localhost:8000/ws")
     if AUTH_ENABLED:
@@ -62,7 +62,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="AgentWatch",
     description="AI Agent Security Monitoring Platform - Track, Debug, and Optimize Your AI Agents",
-    version="0.7.0",
+    version="0.8.0",
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan,
@@ -975,6 +975,296 @@ async def get_model_performance_comparison():
             "recommendation": "Best choice for cost-sensitive production workloads",
         },
     }
+
+
+# ==================== Data Export API ====================
+
+import io
+import csv
+from fastapi.responses import StreamingResponse
+
+
+@app.get("/api/v1/export/traces/json", tags=["Export"])
+async def export_traces_json(
+    provider: Optional[str] = Query(None, description="Provider filter"),
+    status: Optional[str] = Query(None, description="Status filter"),
+    start_time: Optional[datetime] = Query(None, description="Start time"),
+    end_time: Optional[datetime] = Query(None, description="End time"),
+    agent_id: Optional[str] = Query(None, description="Agent ID filter"),
+):
+    """
+    Export traces as JSON file
+    
+    Returns all traces matching filters as a downloadable JSON file.
+    """
+    traces = TraceService.list_traces(
+        page=1,
+        page_size=10000,
+        provider=provider,
+        status=status,
+        start_time=start_time,
+        end_time=end_time,
+        agent_id=agent_id,
+    )
+    
+    # Convert to export format
+    export_data = {
+        "export_metadata": {
+            "exported_at": datetime.utcnow().isoformat(),
+            "total_traces": len(traces.traces),
+            "filters": {
+                "provider": provider,
+                "status": status,
+                "start_time": start_time.isoformat() if start_time else None,
+                "end_time": end_time.isoformat() if end_time else None,
+                "agent_id": agent_id,
+            },
+        },
+        "traces": [t.model_dump() for t in traces.traces],
+    }
+    
+    # Create JSON content
+    json_content = json.dumps(export_data, indent=2, default=str)
+    
+    return StreamingResponse(
+        iter([json_content]),
+        media_type="application/json",
+        headers={
+            "Content-Disposition": f"attachment; filename=agentwatch_traces_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.json"
+        },
+    )
+
+
+@app.get("/api/v1/export/traces/csv", tags=["Export"])
+async def export_traces_csv(
+    provider: Optional[str] = Query(None, description="Provider filter"),
+    status: Optional[str] = Query(None, description="Status filter"),
+    start_time: Optional[datetime] = Query(None, description="Start time"),
+    end_time: Optional[datetime] = Query(None, description="End time"),
+    agent_id: Optional[str] = Query(None, description="Agent ID filter"),
+):
+    """
+    Export traces as CSV file
+    
+    Returns all traces matching filters as a downloadable CSV file.
+    Suitable for spreadsheet analysis.
+    """
+    traces = TraceService.list_traces(
+        page=1,
+        page_size=10000,
+        provider=provider,
+        status=status,
+        start_time=start_time,
+        end_time=end_time,
+        agent_id=agent_id,
+    )
+    
+    # Create CSV content
+    output = io.StringIO()
+    writer = csv.writer(output)
+    
+    # Header row
+    headers = [
+        "trace_id", "agent_id", "agent_name", "provider", "model",
+        "status", "total_cost", "input_tokens", "output_tokens",
+        "duration_ms", "created_at", "completed_at", "session_id", "user_id"
+    ]
+    writer.writerow(headers)
+    
+    # Data rows
+    for trace in traces.traces:
+        row = [
+            trace.trace_id,
+            trace.agent_id,
+            trace.agent_name,
+            str(trace.provider),
+            trace.model,
+            trace.status,
+            trace.total_cost or 0,
+            trace.total_input_tokens or 0,
+            trace.total_output_tokens or 0,
+            trace.duration_ms or 0,
+            trace.created_at.isoformat() if trace.created_at else "",
+            trace.completed_at.isoformat() if trace.completed_at else "",
+            trace.session_id or "",
+            trace.user_id or "",
+        ]
+        writer.writerow(row)
+    
+    csv_content = output.getvalue()
+    output.close()
+    
+    return StreamingResponse(
+        iter([csv_content]),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": f"attachment; filename=agentwatch_traces_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.csv"
+        },
+    )
+
+
+@app.get("/api/v1/export/cost/summary", tags=["Export"])
+async def export_cost_summary(
+    format: str = Query("json", description="Export format: json or csv"),
+    provider: Optional[str] = Query(None, description="Provider filter"),
+    start_time: Optional[datetime] = Query(None, description="Start time"),
+    end_time: Optional[datetime] = Query(None, description="End time"),
+):
+    """
+    Export cost summary report
+    
+    Returns cost breakdown by provider and model.
+    """
+    cost_data = TraceService.get_cost_summary(
+        provider=provider,
+        start_time=start_time,
+        end_time=end_time,
+    )
+    
+    if format == "csv":
+        output = io.StringIO()
+        writer = csv.writer(output)
+        
+        # Headers
+        writer.writerow(["provider", "model", "total_traces", "total_cost", "total_tokens", "avg_latency_ms"])
+        
+        # Data
+        for item in cost_data:
+            writer.writerow([
+                str(item.provider),
+                item.model,
+                item.total_traces,
+                item.total_cost,
+                item.total_tokens,
+                item.avg_latency_ms,
+            ])
+        
+        csv_content = output.getvalue()
+        output.close()
+        
+        return StreamingResponse(
+            iter([csv_content]),
+            media_type="text/csv",
+            headers={
+                "Content-Disposition": f"attachment; filename=agentwatch_cost_summary_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.csv"
+            },
+        )
+    else:
+        export_data = {
+            "export_metadata": {
+                "exported_at": datetime.utcnow().isoformat(),
+                "filters": {
+                    "provider": provider,
+                    "start_time": start_time.isoformat() if start_time else None,
+                    "end_time": end_time.isoformat() if end_time else None,
+                },
+            },
+            "cost_summary": [item.model_dump() for item in cost_data],
+        }
+        
+        json_content = json.dumps(export_data, indent=2, default=str)
+        
+        return StreamingResponse(
+            iter([json_content]),
+            media_type="application/json",
+            headers={
+                "Content-Disposition": f"attachment; filename=agentwatch_cost_summary_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.json"
+            },
+        )
+
+
+@app.get("/api/v1/export/analytics/report", tags=["Export"])
+async def export_analytics_report(
+    format: str = Query("json", description="Export format: json or csv"),
+    days: int = Query(7, ge=1, le=30, description="Number of days to include"),
+):
+    """
+    Export comprehensive analytics report
+    
+    Includes:
+    - Overall statistics
+    - Provider breakdown
+    - Model performance
+    - Daily trends
+    """
+    stats = TraceService.get_stats()
+    traces = TraceService.list_traces(page=1, page_size=10000)
+    
+    # Daily breakdown
+    daily_data = defaultdict(lambda: {"traces": 0, "cost": 0.0, "tokens": 0})
+    for trace in traces.traces:
+        if trace.created_at:
+            day_key = trace.created_at.strftime("%Y-%m-%d")
+            daily_data[day_key]["traces"] += 1
+            daily_data[day_key]["cost"] += trace.total_cost or 0
+            daily_data[day_key]["tokens"] += (trace.total_input_tokens or 0) + (trace.total_output_tokens or 0)
+    
+    # Provider breakdown
+    provider_stats = defaultdict(lambda: {"traces": 0, "cost": 0.0, "tokens": 0})
+    for trace in traces.traces:
+        provider_stats[str(trace.provider)]["traces"] += 1
+        provider_stats[str(trace.provider)]["cost"] += trace.total_cost or 0
+        provider_stats[str(trace.provider)]["tokens"] += (trace.total_input_tokens or 0) + (trace.total_output_tokens or 0)
+    
+    # Build report
+    report = {
+        "export_metadata": {
+            "exported_at": datetime.utcnow().isoformat(),
+            "report_days": days,
+        },
+        "overall_stats": stats,
+        "daily_trends": [
+            {"date": k, "traces": v["traces"], "cost": round(v["cost"], 4), "tokens": v["tokens"]}
+            for k, v in sorted(daily_data.items(), reverse=True)[:days]
+        ],
+        "provider_breakdown": [
+            {"provider": k, "traces": v["traces"], "cost": round(v["cost"], 4), "tokens": v["tokens"]}
+            for k, v in sorted(provider_stats.items(), key=lambda x: x[1]["cost"], reverse=True)
+        ],
+    }
+    
+    if format == "csv":
+        output = io.StringIO()
+        writer = csv.writer(output)
+        
+        # Overall stats
+        writer.writerow(["=== OVERALL STATS ==="])
+        writer.writerow(["metric", "value"])
+        for key, value in stats.items():
+            writer.writerow([key, value])
+        
+        writer.writerow([])
+        writer.writerow(["=== DAILY TRENDS ==="])
+        writer.writerow(["date", "traces", "cost", "tokens"])
+        for day in report["daily_trends"]:
+            writer.writerow([day["date"], day["traces"], day["cost"], day["tokens"]])
+        
+        writer.writerow([])
+        writer.writerow(["=== PROVIDER BREAKDOWN ==="])
+        writer.writerow(["provider", "traces", "cost", "tokens"])
+        for provider in report["provider_breakdown"]:
+            writer.writerow([provider["provider"], provider["traces"], provider["cost"], provider["tokens"]])
+        
+        csv_content = output.getvalue()
+        output.close()
+        
+        return StreamingResponse(
+            iter([csv_content]),
+            media_type="text/csv",
+            headers={
+                "Content-Disposition": f"attachment; filename=agentwatch_analytics_report_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.csv"
+            },
+        )
+    else:
+        json_content = json.dumps(report, indent=2, default=str)
+        
+        return StreamingResponse(
+            iter([json_content]),
+            media_type="application/json",
+            headers={
+                "Content-Disposition": f"attachment; filename=agentwatch_analytics_report_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.json"
+            },
+        )
 
 
 # 开发运行: uvicorn main:app --reload --port 8000

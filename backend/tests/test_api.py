@@ -655,3 +655,151 @@ class TestBudgetAPI:
         data = response.json()
         assert "today_cost" in data["status"]
         assert "daily_usage_percent" in data["status"]
+
+
+class TestExportAPI:
+    """Export API Tests"""
+
+    def test_export_traces_json(self):
+        """Test exporting traces as JSON"""
+        # Create a test trace first
+        trace_data = {
+            "agent_id": "export_test_agent",
+            "agent_name": "Export Test Agent",
+            "provider": "openai",
+            "model": "gpt-4o",
+        }
+        client.post("/api/v1/trace", json=trace_data)
+
+        response = client.get("/api/v1/export/traces/json")
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "application/json"
+        assert "attachment" in response.headers.get("content-disposition", "")
+        
+        # Verify content is valid JSON
+        data = response.json()
+        assert "export_metadata" in data
+        assert "traces" in data
+        assert "total_traces" in data["export_metadata"]
+        assert data["export_metadata"]["total_traces"] >= 1
+
+    def test_export_traces_json_with_filters(self):
+        """Test exporting traces as JSON with filters"""
+        response = client.get("/api/v1/export/traces/json?provider=openai&status=running")
+        assert response.status_code == 200
+        data = response.json()
+        assert "filters" in data["export_metadata"]
+        assert data["export_metadata"]["filters"]["provider"] == "openai"
+
+    def test_export_traces_csv(self):
+        """Test exporting traces as CSV"""
+        # Create a test trace first
+        trace_data = {
+            "agent_id": "export_csv_test",
+            "agent_name": "Export CSV Test",
+            "provider": "anthropic",
+            "model": "claude-3-sonnet",
+        }
+        client.post("/api/v1/trace", json=trace_data)
+
+        response = client.get("/api/v1/export/traces/csv")
+        assert response.status_code == 200
+        assert "text/csv" in response.headers["content-type"]
+        assert "attachment" in response.headers.get("content-disposition", "")
+        assert ".csv" in response.headers.get("content-disposition", "")
+
+    def test_export_traces_csv_content_structure(self):
+        """Test CSV export content structure"""
+        response = client.get("/api/v1/export/traces/csv")
+        content = response.text
+        
+        # Check header row
+        lines = content.strip().split("\n")
+        header = lines[0]
+        assert "trace_id" in header
+        assert "agent_name" in header
+        assert "provider" in header
+        assert "total_cost" in header
+
+    def test_export_cost_summary_json(self):
+        """Test exporting cost summary as JSON"""
+        response = client.get("/api/v1/export/cost/summary")
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "application/json"
+        
+        data = response.json()
+        assert "export_metadata" in data
+        assert "cost_summary" in data
+
+    def test_export_cost_summary_csv(self):
+        """Test exporting cost summary as CSV"""
+        response = client.get("/api/v1/export/cost/summary?format=csv")
+        assert response.status_code == 200
+        assert "text/csv" in response.headers["content-type"]
+        assert ".csv" in response.headers.get("content-disposition", "")
+
+    def test_export_cost_summary_csv_content(self):
+        """Test cost summary CSV content"""
+        response = client.get("/api/v1/export/cost/summary?format=csv")
+        content = response.text
+        
+        lines = content.strip().split("\n")
+        header = lines[0]
+        assert "provider" in header
+        assert "model" in header
+        assert "total_cost" in header
+        assert "total_tokens" in header
+
+    def test_export_analytics_report_json(self):
+        """Test exporting analytics report as JSON"""
+        response = client.get("/api/v1/export/analytics/report")
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "application/json"
+        
+        data = response.json()
+        assert "export_metadata" in data
+        assert "overall_stats" in data
+        assert "daily_trends" in data
+        assert "provider_breakdown" in data
+
+    def test_export_analytics_report_csv(self):
+        """Test exporting analytics report as CSV"""
+        response = client.get("/api/v1/export/analytics/report?format=csv")
+        assert response.status_code == 200
+        assert "text/csv" in response.headers["content-type"]
+        
+        content = response.text
+        # CSV should have multiple sections
+        assert "OVERALL STATS" in content
+        assert "DAILY TRENDS" in content
+        assert "PROVIDER BREAKDOWN" in content
+
+    def test_export_analytics_report_with_days(self):
+        """Test analytics report with custom days parameter"""
+        response = client.get("/api/v1/export/analytics/report?days=7")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["export_metadata"]["report_days"] == 7
+
+    def test_export_analytics_report_invalid_days(self):
+        """Test analytics report with invalid days parameter"""
+        response = client.get("/api/v1/export/analytics/report?days=100")
+        assert response.status_code == 422  # Validation error
+
+    def test_export_traces_with_provider_filter(self):
+        """Test export with provider filter"""
+        # Create traces with different providers
+        for provider in ["openai", "anthropic", "deepseek"]:
+            client.post("/api/v1/trace", json={
+                "agent_id": f"filter_{provider}",
+                "agent_name": f"Filter {provider}",
+                "provider": provider,
+                "model": "test-model",
+            })
+
+        response = client.get("/api/v1/export/traces/json?provider=openai")
+        data = response.json()
+        
+        # All traces should be from openai provider
+        for trace in data["traces"]:
+            assert trace["provider"] == "openai"

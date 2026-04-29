@@ -242,6 +242,15 @@
 - **2026-04-29**: README Roadmap 更新（Week 3 完成）
 - **2026-04-29**: 创建项目演进路径文档 (docs/EVOLUTION_ROADMAP.md)
 - **2026-04-29**: Week 3 完成，进入 Week 4 🚀
+- **2026-04-29**: 数据导出 API (Export API) 📊
+  - /api/v1/export/traces/json - JSON 格式导出
+  - /api/v1/export/traces/csv - CSV 格式导出
+  - /api/v1/export/cost/summary - 成本汇总导出
+  - /api/v1/export/analytics/report - 分析报告导出
+  - 前端 Export 组件完成（筛选 + 下载按钮）
+  - 支持 provider/status/agent_id/日期范围筛选
+- **2026-04-29**: Backend 测试增至 118 个 ✅
+- **2026-04-29**: 版本升级至 0.8.0 🎉
 
 ---
 

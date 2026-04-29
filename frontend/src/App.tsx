@@ -10,6 +10,7 @@ import CostOptimization from './components/CostOptimization'
 import Settings from './components/Settings'
 import About from './components/About'
 import Charts from './components/Charts'
+import Export from './components/Export'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -51,7 +52,7 @@ function MainLayout({ children }: { children: React.ReactNode }) {
             <div>
               <h1 className="text-2xl font-bold text-white">
                 🔍 AgentWatch
-                <span className="text-sm text-slate-400 ml-2">v0.6.0</span>
+                <span className="text-sm text-slate-400 ml-2">v0.8.0</span>
               </h1>
               <p className="text-slate-400 text-sm mt-1">
                 AI Agent Security Monitoring Platform
@@ -70,6 +71,9 @@ function MainLayout({ children }: { children: React.ReactNode }) {
                 </a>
                 <a href="/charts" className="text-slate-400 hover:text-white transition-colors text-sm">
                   Charts
+                </a>
+                <a href="/export" className="text-slate-400 hover:text-white transition-colors text-sm">
+                  Export
                 </a>
                 <a href="/settings" className="text-slate-400 hover:text-white transition-colors text-sm">
                   Settings
@@ -158,6 +162,13 @@ function App() {
               <ProtectedRoute>
                 <MainLayout>
                   <Charts />
+                </MainLayout>
+              </ProtectedRoute>
+            } />
+            <Route path="/export" element={
+              <ProtectedRoute>
+                <MainLayout>
+                  <Export />
                 </MainLayout>
               </ProtectedRoute>
             } />

@@ -689,4 +689,134 @@ print(f"Total cost: ${stats['total_cost']}")
 
 ---
 
+## Export API
+
+### GET /api/v1/export/traces/json
+
+导出所有 Traces 为 JSON 文件。
+
+**Query Parameters:**
+- `provider` (str): 按 Provider 过滤
+- `status` (str): 按状态过滤
+- `agent_id` (str): 按 Agent ID 过滤
+- `start_time` (datetime): 开始时间
+- `end_time` (datetime): 结束时间
+
+**Response:**
+返回可下载的 JSON 文件，包含:
+```json
+{
+  "export_metadata": {
+    "exported_at": "2026-04-29T12:00:00Z",
+    "total_traces": 150,
+    "filters": {
+      "provider": "openai",
+      "status": "completed"
+    }
+  },
+  "traces": [
+    {
+      "trace_id": "trace_001",
+      "agent_name": "MyAgent",
+      "provider": "openai",
+      "model": "gpt-4o",
+      "status": "completed",
+      "total_cost": 0.0035,
+      "total_input_tokens": 100,
+      "total_output_tokens": 200
+    }
+  ]
+}
+```
+
+---
+
+### GET /api/v1/export/traces/csv
+
+导出所有 Traces 为 CSV 文件（适合 Excel 分析）。
+
+**Query Parameters:**
+同 JSON 导出
+
+**Response:**
+返回可下载的 CSV 文件，包含以下列:
+- trace_id, agent_id, agent_name, provider, model
+- status, total_cost, input_tokens, output_tokens
+- duration_ms, created_at, completed_at, session_id, user_id
+
+---
+
+### GET /api/v1/export/cost/summary
+
+导出成本汇总报告。
+
+**Query Parameters:**
+- `format` (str): 导出格式，json 或 csv，默认 json
+- `provider` (str): 按 Provider 过滤
+- `start_time` (datetime): 开始时间
+- `end_time` (datetime): 结束时间
+
+**JSON Response:**
+```json
+{
+  "export_metadata": {
+    "exported_at": "2026-04-29T12:00:00Z",
+    "filters": {}
+  },
+  "cost_summary": [
+    {
+      "provider": "openai",
+      "model": "gpt-4o",
+      "total_traces": 50,
+      "total_cost": 10.50,
+      "total_tokens": 25000,
+      "avg_latency_ms": 1500
+    }
+  ]
+}
+```
+
+---
+
+### GET /api/v1/export/analytics/report
+
+导出综合分析报告。
+
+**Query Parameters:**
+- `format` (str): 导出格式，json 或 csv，默认 json
+- `days` (int): 分析天数，范围 1-30，默认 7
+
+**Response:**
+```json
+{
+  "export_metadata": {
+    "exported_at": "2026-04-29T12:00:00Z",
+    "report_days": 7
+  },
+  "overall_stats": {
+    "total_traces": 500,
+    "total_cost": 25.50,
+    "avg_latency_ms": 1200
+  },
+  "daily_trends": [
+    {
+      "date": "2026-04-28",
+      "traces": 80,
+      "cost": 5.25,
+      "tokens": 15000
+    }
+  ],
+  "provider_breakdown": [
+    {
+      "provider": "openai",
+      "traces": 300,
+      "cost": 20.0,
+      "tokens": 40000
+    }
+  ]
+}
+```
+
+---
+
 **Made with ❤️ by AgentWatch Team**
