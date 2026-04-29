@@ -1,3 +1,5 @@
+# Docker Compose Production Configuration
+
 version: '3.8'
 
 services:
@@ -9,10 +11,12 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-default-dev-key-change-in-prod}
-      - STORAGE_TYPE=${STORAGE_TYPE:-memory}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - STORAGE_TYPE=sqlite
       - DATABASE_PATH=/data/agentwatch.db
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - LOG_LEVEL=WARNING
+      - ACCESS_TOKEN_EXPIRE_HOURS=24
+      - REFRESH_TOKEN_EXPIRE_DAYS=7
     volumes:
       - agentwatch-data:/data
     restart: unless-stopped
@@ -22,22 +26,35 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
 
   # Frontend Dashboard
   frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.prod
     ports:
       - "3000:80"
     environment:
-      - VITE_API_URL=${API_URL:-http://localhost:8000}
+      - VITE_API_URL=${API_URL}
     depends_on:
       backend:
         condition: service_healthy
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
 
-  # ClickHouse (optional, for production)
+  # ClickHouse (production storage)
   clickhouse:
     image: clickhouse/clickhouse-server:latest
     ports:
@@ -46,9 +63,12 @@ services:
     volumes:
       - clickhouse_data:/var/lib/clickhouse
       - ./scripts/init_clickhouse.sql:/docker-entrypoint-initdb.d/init.sql
-    profiles:
-      - production
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
 
 volumes:
   agentwatch-data:

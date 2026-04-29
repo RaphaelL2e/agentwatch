@@ -4,19 +4,35 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agentwatch"
-version = "0.1.0"
-description = "AgentWatch SDK - Open-source AI Agent Monitoring Platform for Python"
+version = "0.7.1"
+description = "AgentWatch SDK - Open-source AI Agent Monitoring Platform. Track traces, costs, and performance across OpenAI, Anthropic, DeepSeek, and Gemini."
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.8"
 authors = [
-    {name = "RaphaelL2e", email = "liyafei@example.com"}
+    {name = "RaphaelL2e", email = "raphael.l2e@gmail.com"}
 ]
-keywords = ["ai", "agent", "monitoring", "tracing", "observability", "llm", "openai", "anthropic", "deepseek"]
+keywords = [
+    "ai",
+    "agent",
+    "monitoring",
+    "tracing",
+    "observability",
+    "llm",
+    "openai",
+    "anthropic",
+    "claude",
+    "deepseek",
+    "gemini",
+    "cost-tracking",
+    "websocket",
+    "dashboard",
+]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
@@ -26,6 +42,7 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Topic :: System :: Monitoring",
+    "Typing :: Typed",
 ]
 
 dependencies = [
@@ -36,9 +53,15 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
     "black>=23.0.0",
     "ruff>=0.1.0",
     "mypy>=1.0.0",
+]
+
+all = [
+    "httpx>=0.24.0",
+    "pydantic>=2.0.0",
 ]
 
 [project.urls]
@@ -51,6 +74,13 @@ Changelog = "https://github.com/RaphaelL2e/agentwatch/releases"
 [tool.hatch.build.targets.wheel]
 packages = ["agentwatch"]
 
+[tool.hatch.build.targets.sdist]
+include = [
+    "agentwatch/",
+    "README.md",
+    "LICENSE",
+]
+
 [tool.black]
 line-length = 88
 target-version = ["py38"]
@@ -58,3 +88,13 @@ target-version = ["py38"]
 [tool.ruff]
 line-length = 88
 select = ["E", "F", "W"]
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_ignores = true
+disallow_untyped_defs = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

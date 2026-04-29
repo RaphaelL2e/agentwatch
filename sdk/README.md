@@ -1,174 +1,294 @@
 # AgentWatch SDK
 
-[![PyPI version](https://badge.fury.io/py/agentwatch.svg)](https://badge.fury.io/py/agentwatch)
-[![Python](https://img.shields.io/badge/Python-3.8+-green.svg)](https://python.org)
+**Open-source AI Agent Monitoring Platform**
+
+[![PyPI](https://img.shields.io/badge/PyPI-0.7.1-blue.svg)](https://pypi.org/project/agentwatch/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![Python](https://img.shields.io/badge/Python-3.8+-green.svg)](https://python.org)
 
-**AgentWatch SDK** 是 [AgentWatch](https://github.com/RaphaelL2e/agentwatch) 的 Python 客户端库，用于追踪和监控 AI Agent 的执行流程、Token 成本和性能指标。
+AgentWatch helps you track, analyze, and optimize AI agent performance and costs.
 
-## 安装
+**🔥 Key Discovery: DeepSeek costs only 1/107 of OpenAI GPT-4o!**
+
+## Features
+
+- **Trace Tracking** - Full execution flow with timestamps, inputs/outputs, events
+- **Cost Monitoring** - Real-time cost calculation for OpenAI, Anthropic, DeepSeek, Gemini
+- **Performance Analysis** - Latency metrics, success rates, token usage
+- **Real-time Updates** - WebSocket for live dashboard updates
+- **Multi-provider Support** - Works with any LLM client (OpenAI, Claude, DeepSeek, Gemini)
+- **Zero Intrusion** - Context manager + decorator patterns, minimal code changes
+
+## Installation
 
 ```bash
 pip install agentwatch
 ```
 
-## 快速开始
+## Quick Start
 
-### 1. 基础使用
-
-```python
-from agentwatch import AgentWatch
-
-# 创建客户端
-aw = AgentWatch(api_url="http://localhost:8000")
-
-# 创建 Trace
-trace = aw.create_trace(
-    agent_id="my_agent",
-    agent_name="MyAgent",
-    provider="openai",
-    model="gpt-4o-mini",
-    prompt="Hello, AI!"
-)
-
-# 添加事件
-trace.add_event(
-    event_type="call",
-    input_tokens=100,
-    content="开始处理"
-)
-
-# 记录 Token
-trace.log_tokens(input=100, output=200)
-
-# 完成 Trace
-trace.complete()
-```
-
-### 2. 上下文管理器（推荐）
-
-```python
-from agentwatch import AgentWatch
-
-aw = AgentWatch(api_url="http://localhost:8000")
-
-# 自动追踪
-with aw.trace("my_agent", model="gpt-4o") as trace:
-    # 你的 Agent 逻辑
-    response = openai.chat.completions.create(...)
-    
-    # 记录 Token 使用
-    trace.log_tokens(
-        input=response.usage.prompt_tokens,
-        output=response.usage.completion_tokens
-    )
-    
-    # Trace 自动完成（包括错误处理）
-```
-
-### 3. 获取统计数据
-
-```python
-# 获取统计数据
-stats = aw.get_stats()
-print(f"总 Traces: {stats['total_traces']}")
-print(f"总成本: ${stats['total_cost']}")
-
-# 获取 Trace 列表
-traces = aw.list_traces(page=1, page_size=10)
-for trace in traces['traces']:
-    print(f"{trace['agent_name']}: {trace['total_cost']}")
-
-# 获取成本汇总
-cost_summary = aw.get_cost_summary()
-for cs in cost_summary:
-    print(f"{cs['provider']}/{cs['model']}: ${cs['total_cost']}")
-```
-
-## API 参考
-
-### AgentWatch 客户端
-
-| 方法 | 说明 |
-|------|------|
-| `AgentWatch(api_url)` | 创建客户端 |
-| `health_check()` | 健康检查 |
-| `create_trace(...)` | 创建 Trace |
-| `trace(name, model)` | 上下文管理器 |
-| `get_trace(trace_id)` | 获取 Trace |
-| `list_traces(page, page_size)` | 列出 Traces |
-| `get_stats()` | 获取统计 |
-| `get_cost_summary()` | 成本汇总 |
-| `close()` | 关闭客户端 |
-
-### Trace 方法
-
-| 方法 | 说明 |
-|------|------|
-| `add_event(event_type, ...)` | 添加事件 |
-| `log_tokens(input, output)` | 记录 Token |
-| `log_error(message)` | 记录错误 |
-| `complete()` | 完成 Trace |
-
-## 支持的 Provider
-
-| Provider | 模型示例 | 成本（USD/1K tokens） |
-|----------|----------|-----------------------|
-| OpenAI | gpt-4o | $0.005/$0.015 |
-| OpenAI | gpt-4o-mini | $0.00015/$0.0006 |
-| Anthropic | claude-3.5-sonnet | $0.003/$0.015 |
-| DeepSeek | deepseek-v4 | $0.00014/$0.00028 |
-| Google | gemini-1.5-pro | $0.00125/$0.005 |
-
-**成本优势**: DeepSeek 成本仅 OpenAI 的 **1/107**！
-
-## 完整示例
-
-查看 `examples/` 目录：
-
-- `basic_usage.py` - 基础使用示例
-- `complete_demo.py` - 完整演示（多场景、错误处理、Dashboard）
-
-## 后端服务
-
-SDK 需要 AgentWatch 后端服务运行：
+### 1. Start the Backend
 
 ```bash
-# 克隆仓库
+# Clone and run backend
 git clone https://github.com/RaphaelL2e/agentwatch.git
-
-# 启动后端
 cd agentwatch/backend
 python main.py
 ```
 
-服务启动后访问:
-- API 文档: http://localhost:8000/docs
-- Dashboard: http://localhost:3000
+Backend runs at http://localhost:8000
+- API Docs: http://localhost:8000/docs
+- Dashboard: http://localhost:8000/api/v1/dashboard
 
-## 开发
+### 2. Use in Your Agent
+
+```python
+from agentwatch import AgentWatch
+
+# Create client
+aw = AgentWatch(api_url="http://localhost:8000")
+
+# Method 1: Context manager (auto-tracking)
+with aw.trace("my_agent", model="gpt-4o") as trace:
+    response = openai.chat.completions.create(...)
+    trace.log_tokens(
+        input=response.usage.prompt_tokens,
+        output=response.usage.completion_tokens
+    )
+
+# Method 2: Decorator (zero intrusion)
+from agentwatch.decorators import trace_agent
+
+@trace_agent("my_agent", model="gpt-4o")
+def call_gpt(prompt: str):
+    return openai.chat.completions.create(...)
+
+# Get statistics
+stats = aw.get_stats()
+print(f"Total traces: {stats['total_traces']}")
+print(f"Total cost: ${stats['total_cost']}")
+```
+
+## Cost Comparison
+
+| Provider | Model | Input Cost | Output Cost | vs GPT-4o |
+|----------|-------|------------|-------------|-----------|
+| OpenAI | GPT-4o | $5.00/1M | $15.00/1M | baseline |
+| OpenAI | GPT-4o-mini | $0.15/1M | $0.60/1M | 16x cheaper |
+| Anthropic | Claude 3.5 Sonnet | $3.00/1M | $15.00/1M | 1.7x cheaper |
+| **DeepSeek** | **DeepSeek V4** | **$0.14/1M** | **$0.28/1M** | **107x cheaper** |
+| Google | Gemini 1.5 Pro | $1.25/1M | $5.00/1M | 4x cheaper |
+
+**AgentWatch automatically calculates costs and suggests optimizations!**
+
+## SDK Features
+
+### Decorators
+
+```python
+from agentwatch.decorators import (
+    trace_agent,       # Basic tracing
+    with_retry,        # Auto retry with backoff
+    with_rate_limit,   # Rate limiting
+    with_timeout,      # Timeout control
+    with_cache,        # Response caching
+    with_fallback,     # Provider fallback
+)
+
+# Retry on failure
+@with_retry(max_attempts=3, backoff=2.0)
+def call_with_retry():
+    return openai.chat.completions.create(...)
+
+# Rate limiting
+@with_rate_limit(requests_per_minute=60)
+def call_with_limit():
+    return openai.chat.completions.create(...)
+
+# Timeout control
+@with_timeout(seconds=30)
+def call_with_timeout():
+    return openai.chat.completions.create(...)
+
+# Response caching
+@with_cache(ttl_seconds=300)
+def call_with_cache(prompt):
+    return openai.chat.completions.create(...)
+
+# Provider fallback
+@with_fallback(
+    primary="openai",
+    fallbacks=["deepseek", "claude"]
+)
+def call_with_fallback():
+    return openai.chat.completions.create(...)
+```
+
+### Circuit Breaker
+
+```python
+from agentwatch.decorators import CircuitBreaker
+
+breaker = CircuitBreaker(
+    failure_threshold=5,
+    recovery_timeout=60
+)
+
+@breaker.protect
+def protected_call():
+    return openai.chat.completions.create(...)
+```
+
+## Dashboard
+
+AgentWatch includes a real-time React Dashboard:
+
+- **Stats Cards** - Total traces, success rate, costs
+- **Trace List** - Searchable, filterable trace history
+- **Cost Alerts** - Daily/monthly budget thresholds
+- **WebSocket Updates** - Live updates without polling
+- **Charts** - Token distribution, cost trends, latency histograms
+
+## Integration Examples
+
+### OpenAI
+
+```python
+from openai import OpenAI
+from agentwatch import AgentWatch
+
+client = OpenAI()
+aw = AgentWatch()
+
+with aw.trace("openai_agent", model="gpt-4o") as trace:
+    response = client.chat.completions.create(
+        model="gpt-4o",
+        messages=[{"role": "user", "content": "Hello!"}]
+    )
+    trace.log_tokens(
+        input=response.usage.prompt_tokens,
+        output=response.usage.completion_tokens
+    )
+    trace.add_event("response", content=response.choices[0].message.content)
+```
+
+### Claude (Anthropic)
+
+```python
+from anthropic import Anthropic
+from agentwatch import AgentWatch
+
+client = Anthropic()
+aw = AgentWatch()
+
+with aw.trace("claude_agent", model="claude-3-5-sonnet") as trace:
+    response = client.messages.create(
+        model="claude-3-5-sonnet-20241022",
+        max_tokens=1024,
+        messages=[{"role": "user", "content": "Hello!"}]
+    )
+    trace.log_tokens(
+        input=response.usage.input_tokens,
+        output=response.usage.output_tokens
+    )
+```
+
+### DeepSeek
+
+```python
+from openai import OpenAI  # DeepSeek uses OpenAI-compatible API
+from agentwatch import AgentWatch
+
+client = OpenAI(
+    api_key="your-deepseek-key",
+    base_url="https://api.deepseek.com/v1"
+)
+aw = AgentWatch()
+
+with aw.trace("deepseek_agent", model="deepseek-chat") as trace:
+    response = client.chat.completions.create(
+        model="deepseek-chat",
+        messages=[{"role": "user", "content": "Hello!"}]
+    )
+    trace.log_tokens(
+        input=response.usage.prompt_tokens,
+        output=response.usage.completion_tokens
+    )
+    # 107x cheaper than GPT-4o!
+```
+
+## API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/health` | GET | Health check |
+| `/api/v1/traces` | POST | Create trace |
+| `/api/v1/traces` | GET | List traces |
+| `/api/v1/traces/{id}` | GET | Get trace detail |
+| `/api/v1/stats` | GET | Get statistics |
+| `/api/v1/cost/summary` | GET | Cost summary |
+| `/api/v1/budget` | GET/PUT | Budget management |
+| `/api/v1/models/pricing` | GET | Model pricing data |
+| `/api/v1/models/comparison` | GET | Cost comparison |
+| `/ws` | WebSocket | Real-time updates |
+
+## Architecture
+
+```
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│  AI Agent   │────▶│  SDK Client │────▶│  Backend    │
+│             │     │             │     │  (FastAPI)  │
+│ OpenAI/     │     │ trace()     │     │             │
+│ Claude/     │     │ log_tokens()│     │ WebSocket   │
+│ DeepSeek    │     │ decorators  │     │ REST API    │
+└─────────────┘     └─────────────┘     └──────┬──────┘
+                                               │
+                                               ▼
+                                        ┌─────────────┐
+                                        │  Dashboard  │
+                                        │  (React)    │
+                                        │             │
+                                        │ Real-time   │
+                                        │ Updates     │
+                                        └─────────────┘
+```
+
+## Development
+
+### Run Tests
 
 ```bash
-# 安装开发依赖
-pip install -e ".[dev]"
-
-# 运行测试
-pytest
-
-# 代码检查
-ruff check .
-black .
+cd sdk
+pytest tests/ -v
 ```
+
+### Build Package
+
+```bash
+cd sdk
+python -m build
+```
+
+### Upload to PyPI
+
+```bash
+cd sdk
+twine upload dist/*
+```
+
+## Links
+
+- **GitHub**: https://github.com/RaphaelL2e/agentwatch
+- **Issues**: https://github.com/RaphaelL2e/agentwatch/issues
+- **Documentation**: https://github.com/RaphaelL2e/agentwatch#readme
+- **Changelog**: https://github.com/RaphaelL2e/agentwatch/releases
 
 ## License
 
-Apache 2.0 - 查看 [LICENSE](https://github.com/RaphaelL2e/agentwatch/blob/main/LICENSE)
-
-## 相关项目
-
-- [AgentWatch](https://github.com/RaphaelL2e/agentwatch) - AI Agent 监控平台
-- [AgentWatch Dashboard](https://github.com/RaphaelL2e/agentwatch/tree/main/frontend) - React Dashboard
+Apache 2.0 - See [LICENSE](LICENSE) for details.
 
 ---
 
 **Made with ❤️ by RaphaelL2e**
+
+🚀 **AgentWatch - Make AI Agents Observable, Optimizable, and Trustworthy**

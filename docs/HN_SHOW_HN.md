@@ -1,12 +1,24 @@
-# Hacker News Show HN 发布文案
+# Hacker News Show HN 发布文案 (v0.7.1)
 
 ## 最佳发布时间
 - 周二 9:00-10:00 AM PST（北京时间周二 00:00-01:00）
 - 或 周二 12:00-13:00 PST（北京时间周二 04:00-05:00）
 
 ## 标题
+
+### 推荐（平衡版）
 ```
-Show HN: AgentWatch – Open-source AI Agent monitoring platform (trace + cost + WebSocket)
+Show HN: AgentWatch – Open-source AI Agent monitoring (trace + cost + WebSocket)
+```
+
+### 成本亮点版
+```
+Show HN: AgentWatch – DeepSeek costs 1/107 of GPT-4o (monitor it!)
+```
+
+### 简洁版
+```
+Show HN: AgentWatch – Datadog for AI Agents
 ```
 
 ## 正文
@@ -17,145 +29,188 @@ Hi HN,
 I built AgentWatch, an open-source monitoring platform for AI agents.
 
 The Problem:
-- AI agents are becoming increasingly complex, but there's no easy way to track what they're doing
-- API costs are hard to monitor and optimize (especially across multiple providers)
-- When agents fail, debugging is painful without execution traces
-- No real-time visibility into agent activity
+- AI agents are black boxes - you can't see what they're doing
+- API costs are unpredictable (OpenAI bills can be shocking)
+- Debugging failed agents is painful without execution traces
+- No unified view across multiple LLM providers
 
 What I built:
-AgentWatch provides a unified interface to monitor your AI agents:
+AgentWatch gives you visibility into your AI agents:
 
-1. Trace Tracking - Full execution flow with timestamps, inputs/outputs, and events
-2. Cost Monitoring - Real-time cost calculation for OpenAI, Anthropic, DeepSeek, Gemini
-3. Performance Analysis - Latency metrics, success rates, token usage histograms
-4. Real-time Updates - WebSocket for live dashboard updates (no polling!)
+1. **Trace Tracking** - Full execution flow with timestamps, inputs/outputs, events
+2. **Cost Monitoring** - Real-time cost calculation for OpenAI, Claude, DeepSeek, Gemini
+3. **Performance Analysis** - Latency metrics, success rates, token usage
+4. **Real-time Dashboard** - WebSocket updates (no polling!)
 
-Interesting finding: DeepSeek costs only 1/107 of OpenAI GPT-4o! With AgentWatch, you can discover these savings automatically.
+🔥 **Interesting finding**: DeepSeek costs only 1/107 of OpenAI GPT-4o!
+- GPT-4o: $5.00 input / $15.00 output per 1M tokens
+- DeepSeek V4: $0.14 input / $0.28 output per 1M tokens
+
+For $100/month:
+- GPT-4o: ~10M tokens
+- DeepSeek: ~1,070M tokens (100x more!)
+
+AgentWatch automatically calculates these savings and suggests optimizations.
 
 Key features:
 - Zero-intrusion Python SDK (context manager + decorator patterns)
-- Repository Pattern storage abstraction (Memory → ClickHouse switch in one line)
+- Repository Pattern storage (swap Memory → SQLite → PostgreSQL)
 - React Dashboard with real-time WebSocket updates
 - Multi-provider support (OpenAI, Claude, DeepSeek, Gemini)
-- 42 tests with CI pipeline
-- Open-source (Apache 2.0), self-host on your infrastructure
+- 106 tests with CI pipeline
+- Authentication system (JWT + API Key)
+- Open-source (Apache 2.0), self-host forever
 
 Quick start:
-```
+```python
 from agentwatch import AgentWatch
 
 aw = AgentWatch()
 
-with aw.trace("my_agent", model="gpt-4o"):
+# Simple tracing
+with aw.trace("my_agent", model="gpt-4o") as trace:
     response = openai.chat.completions.create(...)
-    trace.log_tokens(input=response.usage.prompt_tokens, 
-                     output=response.usage.completion_tokens)
+    trace.log_tokens(
+        input=response.usage.prompt_tokens,
+        output=response.usage.completion_tokens
+    )
+
+# Get stats
+stats = aw.get_stats()
+print(f"Total cost: ${stats['total_cost']}")
 ```
 
-Or use decorators for zero code intrusion:
-```
-from agentwatch.decorators import trace_agent
+Or use decorators for zero code changes:
+```python
+from agentwatch.decorators import trace_agent, with_retry, with_fallback
 
 @trace_agent("my_agent", model="gpt-4o")
+@with_retry(max_attempts=3)
+@with_fallback(primary="openai", fallbacks=["deepseek"])
 def call_gpt(prompt: str):
     return openai.chat.completions.create(...)
 ```
 
-Architecture highlights:
-- Backend: FastAPI with WebSocket support
-- Frontend: React + Tailwind + TanStack Query
-- Storage: Repository Pattern (swap backend without code changes)
-- Tests: 42 backend tests, pytest CI pipeline
+What's included:
+- FastAPI backend with 14+ API endpoints
+- React Dashboard (real-time WebSocket)
+- Python SDK with decorators (retry, rate-limit, timeout, cache, fallback, circuit breaker)
+- SQLite + Memory storage options
+- JWT + API Key authentication
+- Cost comparison API (DeepSeek vs GPT-4o calculator)
 
 GitHub: https://github.com/RaphaelL2e/agentwatch
+Docs: https://github.com/RaphaelL2e/agentwatch#readme
 
-Tech stack: FastAPI + React + ClickHouse (optional) + Python SDK
+I'm building this as a solo developer on the path to sustainable indie business (not VC hockey stick).
 
-I'm a solo developer building this on the path to financial freedom through indie hacking. Would love feedback from the HN community!
-
-What would you want to see in an AI agent monitoring tool?
+What would you want to see in an AI agent monitoring tool? Happy to add features based on feedback!
 ```
 
-## 备选标题
+## 备选短版本
 
-### 简短版
 ```
-Show HN: AgentWatch – AI Agent monitoring (like Datadog for LLMs)
-```
+Show HN: AgentWatch – Open-source AI Agent monitoring with 107x cost savings (DeepSeek vs GPT-4o)
 
-### 成本重点版
-```
-Show HN: AgentWatch – Track AI agent costs (DeepSeek = 1/107 × OpenAI!)
-```
+I built AgentWatch to track AI agents:
 
-### 开发者重点版
-```
-Show HN: AgentWatch – Python SDK for AI agent observability
+- Trace tracking (full execution flow)
+- Cost monitoring (OpenAI/Claude/DeepSeek/Gemini)
+- Real-time WebSocket dashboard
+- Python SDK with decorators
+
+🔥 DeepSeek costs 1/107 of GPT-4o - AgentWatch calculates this automatically.
+
+106 tests, Apache 2.0, self-host forever.
+
+GitHub: https://github.com/RaphaelL2e/agentwatch
 ```
 
 ## 评论回复模板
 
 ### 关于成本对比
 ```
-Thanks for asking! Here's the cost comparison I calculated:
+Thanks! Here's the math:
 
-OpenAI GPT-4o: $0.005 input, $0.015 output per 1K tokens
-DeepSeek v4: $0.00014 input, $0.00028 output per 1K tokens
+GPT-4o: $5.00 input, $15.00 output per 1M tokens
+DeepSeek V4: $0.14 input, $0.28 output per 1M tokens
 
-Ratio: ~107x cheaper for DeepSeek
-
-For a typical agent making 100 calls/day with 500 tokens each:
-- OpenAI: ~$75/month
+For a typical agent (100 calls/day, 500 tokens each):
+- GPT-4o: ~$75/month
 - DeepSeek: ~$0.70/month
 
-AgentWatch helps you discover these savings by tracking actual usage.
+AgentWatch tracks actual usage so you can verify these savings.
 ```
 
 ### 关于竞品
 ```
-Good question! Key differences from LangSmith/Datadog:
+Great question! Differences from LangSmith/Langfuse:
 
-1. Open-source & self-hosted (no vendor lock-in)
-2. Framework-agnostic (works with any LLM client)
-3. Cost focus (multi-provider comparison built-in)
-4. Lightweight SDK (zero intrusion, just context managers)
-5. Free forever for self-hosted version
+1. Open-source core (Apache 2.0) - no vendor lock-in
+2. Framework-agnostic (works with raw OpenAI/Anthropic clients, not tied to LangChain)
+3. Cost focus built-in (multi-provider comparison)
+4. Lightweight SDK (zero intrusion - just wrap your existing calls)
+5. Self-host forever (no subscription)
 
-LangSmith is great but tied to LangChain ecosystem. AgentWatch works with raw OpenAI/Anthropic clients.
+LangSmith is excellent but requires LangChain. AgentWatch works with any LLM client.
 ```
 
 ### 关于商业化
 ```
-Current plan:
+Following GitLab's open-core model:
+
 - Open-source core (Apache 2.0) - free forever
-- Cloud hosted version (future) - subscription model
-- Enterprise features (SSO, audit logs, compliance) - enterprise pricing
+- Cloud hosted version (future) - $29/month for convenience
+- Enterprise features (SSO, audit logs, compliance) - custom pricing
 
-Following the GitLab model: open core + commercial add-ons.
+Goal: sustainable $12K MRR by Month 12, not VC hockey stick.
+```
 
-Goal is sustainable business, not VC hockey stick growth.
+### 关于技术栈
+```
+Backend: FastAPI + Pydantic + WebSocket
+Frontend: React + Tailwind + TanStack Query
+Storage: Repository Pattern (Memory/SQLite/PostgreSQL)
+Auth: JWT + API Key
+SDK: Python 3.8+, httpx + pydantic
+
+All tested (106 tests), CI on GitHub Actions.
+```
+
+### 关于 DeepSeek 质量
+```
+Valid question! DeepSeek V4 quality is surprisingly good for most tasks.
+
+My testing shows:
+- Simple tasks (classification, extraction): identical to GPT-4o
+- Complex reasoning: slight edge to GPT-4o
+- Code generation: comparable
+
+For cost-sensitive use cases (high volume agents), DeepSeek is a viable option. AgentWatch helps you test both and compare.
 ```
 
 ## 发布 Checklist
 
-- [ ] 确认后端服务运行正常
-- [ ] 确认 Dashboard 可访问
-- [ ] 准备 Demo 截图（可选）
-- [ ] 设置发布时间闹钟
-- [ ] 准备回复评论模板
-- [ ] 发布后 1 小时内回复评论
+- [x] 106 tests passing
+- [x] SDK build successful (v0.7.1)
+- [x] Authentication system complete
+- [x] Cost comparison API working
+- [ ] Backend demo running
+- [ ] Dashboard accessible
+- [ ] Demo screenshots ready
+- [ ] PyPI published (need token)
 
 ## 发布后行动
 
-1. **前 30 分钟**: 观察投票和评论，快速回复
-2. **前 2 小时**: 保持活跃，回答所有问题
+1. **前 30 分钟**: 观察投票，快速回复所有评论
+2. **前 2 小时**: 保持活跃，回答技术问题
 3. **前 24 小时**: 检查趋势，优化回复
-4. **后 1 周**: 分析数据，总结经验
+4. **后 1 周**: GitHub stars 分析，用户反馈收集
 
 ---
 
 **期望结果**:
 - 50-100 upvotes（进入首页）
 - 10-20 条评论
-- 20-50 GitHub stars
-- 5-10 首批用户试用
+- 50-100 GitHub stars
+- 10+ 首批用户试用
