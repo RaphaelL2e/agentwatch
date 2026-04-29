@@ -32,12 +32,20 @@ from trace_service import TraceService
 try:
     from auth.routes import router as auth_router
     from auth.middleware import verify_api_key, get_current_user
-    AUTH_ENABLED = True
+    AUTH_ENABLED=True
 except ImportError:
-    AUTH_ENABLED = False
+    AUTH_ENABLED=False
     auth_router = None
     verify_api_key = None
     get_current_user = None
+
+# Team API module (Phase 2 功能扩展)
+try:
+    from team_api import router as team_router
+    TEAM_API_ENABLED=True
+except ImportError:
+    TEAM_API_ENABLED=False
+    team_router = None
 
 # 启动时间
 START_TIME = time.time()
@@ -85,6 +93,10 @@ app.add_middleware(
 # 注册认证路由
 if AUTH_ENABLED and auth_router:
     app.include_router(auth_router)
+
+# 注册团队协作路由 (Phase 2)
+if TEAM_API_ENABLED and team_router:
+    app.include_router(team_router)
 
 
 # ==================== WebSocket 管理 ====================
