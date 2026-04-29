@@ -1,10 +1,10 @@
 """
 AgentWatch 认证 API 路由
-用户注册、登录、API Key 管理
+用户注册、登录、注销、Token刷新、密码修改、用户更新、API Key 管理
 """
 
-from fastapi import APIRouter, HTTPException, Depends, Request
-from typing import List
+from fastapi import APIRouter, HTTPException, Depends, Request, Header
+from typing import List, Optional
 
 from .models import (
     UserCreate,
@@ -16,9 +16,10 @@ from .models import (
     RefreshTokenRequest,
     PasswordChange,
     UserProfileUpdate,
+    LogoutRequest,
 )
 from .service import AuthService
-from .middleware import get_current_user, verify_api_key
+from .middleware import get_current_user, verify_api_key, extract_token_from_header
 
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -54,7 +55,7 @@ async def login(login_data: UserLogin):
     """用户登录
     
     - 验证邮箱和密码
-    - 返回 JWT Token
+    - 返回 JWT Token (access + refresh)
     """
     try:
         return AuthService.login_user(login_data)
@@ -63,13 +64,40 @@ async def login(login_data: UserLogin):
 
 
 @router.post("/refresh", response_model=TokenResponse, summary="刷新Token")
-async def refresh_token(refresh_data: RefreshTokenRequest, current_user: UserResponse = Depends(get_current_user)):
+async def refresh_token(refresh_data: RefreshTokenRequest):
     """刷新访问令牌
     
-    使用刷新令牌获取新的访问令牌
+    使用刷新令牌获取新的访问令牌和刷新令牌
+    旧的刷新令牌会被加入黑名单
     """
-    # TODO: 实现刷新令牌验证
-    raise HTTPException(status_code=501, detail="Not implemented yet")
+    try:
+        return AuthService.refresh_token(refresh_data.refresh_token)
+    except ValueError as e:
+        raise HTTPException(status_code=401, detail=str(e))
+
+
+@router.post("/logout", summary="用户注销")
+async def logout(
+    current_user: UserResponse = Depends(get_current_user),
+    authorization: Optional[str] = Header(None),
+    refresh_token: Optional[str] = None
+):
+    """用户注销
+    
+    将当前 access token 和 refresh token 加入黑名单
+    """
+    # 从 header 提取 access token
+    access_token = None
+    if authorization:
+        access_token = extract_token_from_header(authorization)
+    
+    result = AuthService.logout_user(access_token, refresh_token)
+    
+    return {
+        "message": result["message"],
+        "blacklisted_tokens": result["blacklisted_tokens"],
+        "user_id": current_user.user_id
+    }
 
 
 @router.get("/me", response_model=UserResponse, summary="获取当前用户信息")
@@ -83,9 +111,14 @@ async def update_profile(
     profile_data: UserProfileUpdate,
     current_user: UserResponse = Depends(get_current_user)
 ):
-    """更新用户信息"""
-    # TODO: 实现用户信息更新
-    raise HTTPException(status_code=501, detail="Not implemented yet")
+    """更新用户信息
+    
+    可更新字段：name, organization
+    """
+    try:
+        return AuthService.update_profile(current_user.user_id, profile_data)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.post("/me/password", summary="修改密码")
@@ -93,19 +126,15 @@ async def change_password(
     password_data: PasswordChange,
     current_user: UserResponse = Depends(get_current_user)
 ):
-    """修改密码"""
-    # TODO: 实现密码修改
-    raise HTTPException(status_code=501, detail="Not implemented yet")
-
-
-@router.post("/logout", summary="用户注销")
-async def logout(current_user: UserResponse = Depends(get_current_user)):
-    """用户注销
+    """修改密码
     
-    将当前Token加入黑名单
+    需要验证旧密码
     """
-    # TODO: 实现Token黑名单
-    return {"message": "Logged out successfully"}
+    try:
+        result = AuthService.change_password(current_user.user_id, password_data)
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 # ==================== API Key 管理 ====================
@@ -187,4 +216,21 @@ async def validate_key(request: Request, auth_info: dict = Depends(verify_api_ke
         "key_id": auth_info["key_id"],
         "scope": [s.value for s in auth_info["scope"]],
         "rate_limit": auth_info["rate_limit"],
+    }
+
+
+@router.get("/blacklist/stats", summary="黑名单统计")
+async def get_blacklist_stats(current_user: UserResponse = Depends(get_current_user)):
+    """获取Token黑名单统计
+    
+    仅管理员可访问
+    """
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    
+    from .jwt import TokenBlacklist
+    
+    return {
+        "blacklisted_tokens": TokenBlacklist.size(),
+        "message": "Token blacklist stats"
     }

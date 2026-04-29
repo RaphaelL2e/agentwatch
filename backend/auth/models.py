@@ -150,6 +150,11 @@ class UserProfileUpdate(BaseModel):
     organization: Optional[str] = Field(None, max_length=100)
 
 
+class LogoutRequest(BaseModel):
+    """注销请求"""
+    refresh_token: Optional[str] = Field(None, description="刷新令牌(可选)")
+
+
 def generate_api_key(tenant_id: str, key_id: str) -> str:
     """生成完整的 API Key"""
     secret = secrets.token_hex(16)
@@ -157,10 +162,55 @@ def generate_api_key(tenant_id: str, key_id: str) -> str:
 
 
 def parse_api_key(api_key: str) -> Dict[str, str]:
-    """解析 API Key"""
+    """解析 API Key
+    
+    格式: aw_t_xxxxxxxx_k_yyyyyyyy_secret
+    - aw_ 前缀
+    - t_xxxxxxxx = tenant_id (10 chars)
+    - _k_ 分隔符
+    - yyyyyyyy = key_id 的 hex 部分 (8 chars)
+    - _ 分隔符
+    - secret = 32 chars
+    """
     if not api_key or not api_key.startswith("aw_"):
         return {}
-    parts = api_key.split("_")
-    if len(parts) != 4:
+    
+    # 格式验证：总长度应为 57 chars (3 + 10 + 3 + 8 + 1 + 32)
+    # aw_t_99b20935_k_021af92b_aa1a58fb2db04f8c18575b0d09db52af
+    # = 3 + 10 + 3 + 8 + 1 + 32 = 57
+    
+    if len(api_key) < 50:  # 最短长度
         return {}
-    return {"tenant_id": parts[1], "key_id": parts[2], "secret": parts[3]}
+    
+    # 去掉 aw_ 前缀
+    rest = api_key[3:]
+    
+    # tenant_id: t_ + 8 hex chars
+    if not rest.startswith("t_"):
+        return {}
+    
+    tenant_id = rest[:10]  # t_99b20935
+    
+    # 检查分隔符 _k_
+    if rest[10:13] != "_k_":
+        return {}
+    
+    # key_id_hex: 8 chars
+    key_id_hex = rest[13:21]  # 021af92b
+    key_id = "k_" + key_id_hex  # k_021af92b
+    
+    # 检查分隔符 _
+    if rest[21] != "_":
+        return {}
+    
+    # secret: 剩下的部分
+    secret = rest[22:]
+    
+    if len(secret) < 16:  # secret 应至少 16 字符
+        return {}
+    
+    return {
+        "tenant_id": tenant_id,
+        "key_id": key_id,
+        "secret": secret
+    }

@@ -239,7 +239,9 @@
 - **2026-04-29**: SDK 测试修复（mock status_code）
 - **2026-04-29**: 72 Backend + 72 SDK 测试全部通过 ✅
 - **2026-04-29**: 版本升级至 0.7.0 🎉
-- **2026-04-29**: README Roadmap 更新（Week 3 进度）
+- **2026-04-29**: README Roadmap 更新（Week 3 完成）
+- **2026-04-29**: 创建项目演进路径文档 (docs/EVOLUTION_ROADMAP.md)
+- **2026-04-29**: Week 3 完成，进入 Week 4 🚀
 
 ---
 

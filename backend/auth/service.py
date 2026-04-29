@@ -1,6 +1,6 @@
 """
 AgentWatch 认证服务
-用户注册、登录、API Key 管理
+用户注册、登录、API Key 管理、密码修改、用户更新
 """
 
 from datetime import datetime, timedelta
@@ -20,6 +20,8 @@ from .models import (
     APIKeyScope,
     PlanType,
     APIKeyValidation,
+    PasswordChange,
+    UserProfileUpdate,
     generate_api_key,
     parse_api_key,
 )
@@ -28,6 +30,8 @@ from .jwt import (
     verify_password,
     create_token_pair,
     verify_token,
+    TokenBlacklist,
+    get_token_expiry,
 )
 
 
@@ -85,10 +89,10 @@ class AuthService:
         
         Args:
             user_data: 注册数据
-        
+            
         Returns:
             UserResponse
-        
+            
         Raises:
             ValueError: 邮箱已存在
         """
@@ -133,10 +137,10 @@ class AuthService:
         
         Args:
             login_data: 登录数据
-        
+            
         Returns:
             TokenResponse with JWT
-        
+            
         Raises:
             ValueError: 验证失败
         """
@@ -192,6 +196,177 @@ class AuthService:
         )
     
     @classmethod
+    def logout_user(cls, access_token: str, refresh_token: Optional[str] = None) -> Dict[str, Any]:
+        """用户注销
+        
+        将 access token 和 refresh token 加入黑名单
+        
+        Args:
+            access_token: 当前访问令牌
+            refresh_token: 刷新令牌（可选）
+            
+        Returns:
+            {"message": "...", "blacklisted_tokens": N}
+        """
+        count = 0
+        
+        # 加入 access token 黑名单
+        if access_token:
+            TokenBlacklist.add_access_token(access_token)
+            count += 1
+        
+        # 加入 refresh token 黑名单
+        if refresh_token:
+            TokenBlacklist.add_refresh_token(refresh_token)
+            count += 1
+        
+        return {
+            "message": "Logged out successfully",
+            "blacklisted_tokens": count
+        }
+    
+    @classmethod
+    def refresh_token(cls, refresh_token: str) -> TokenResponse:
+        """刷新访问令牌
+        
+        Args:
+            refresh_token: 刷新令牌
+            
+        Returns:
+            新的 TokenResponse
+            
+        Raises:
+            ValueError: 刷新令牌无效或已在黑名单
+        """
+        # 验证刷新令牌
+        payload = verify_token(refresh_token, token_type="refresh")
+        if not payload:
+            raise ValueError("Invalid or expired refresh token")
+        
+        # 检查黑名单
+        jti = payload.get("jti")
+        if jti and TokenBlacklist.is_blacklisted(jti):
+            raise ValueError("Refresh token has been revoked")
+        
+        # 获取用户信息
+        user_id = payload.get("sub") or payload.get("user_id")
+        tenant_id = payload.get("tenant_id")
+        
+        if not user_id or not tenant_id:
+            raise ValueError("Invalid refresh token payload")
+        
+        # 查找用户获取完整信息
+        user = cls._users.get(user_id)
+        if not user or not user.is_active:
+            raise ValueError("User not found or disabled")
+        
+        # 将旧的 refresh token 加入黑名单
+        if jti:
+            TokenBlacklist.add(jti, datetime.fromtimestamp(payload.get("exp", 0)))
+        
+        # 生成新的 token pair
+        tokens = create_token_pair(
+            user_id=user.user_id,
+            email=user.email,
+            tenant_id=user.tenant_id,
+            role=user.role.value,
+        )
+        
+        # 统计API Key数量
+        api_keys_count = len(cls._tenant_api_keys.get(user.tenant_id, []))
+        
+        return TokenResponse(
+            access_token=tokens["access_token"],
+            refresh_token=tokens["refresh_token"],
+            expires_in=tokens["expires_in"],
+            user=UserResponse(
+                user_id=user.user_id,
+                email=user.email,
+                name=user.name,
+                organization=user.organization,
+                role=user.role,
+                plan=user.plan,
+                tenant_id=user.tenant_id,
+                created_at=user.created_at,
+                updated_at=user.updated_at,
+                last_login=user.last_login,
+                api_keys_count=api_keys_count,
+            )
+        )
+    
+    @classmethod
+    def change_password(cls, user_id: str, password_data: PasswordChange) -> Dict[str, str]:
+        """修改密码
+        
+        Args:
+            user_id: 用户ID
+            password_data: 密码修改数据
+            
+        Returns:
+            {"message": "Password changed successfully"}
+            
+        Raises:
+            ValueError: 旧密码验证失败
+        """
+        user = cls._users.get(user_id)
+        if not user:
+            raise ValueError("User not found")
+        
+        # 验证旧密码
+        if not verify_password(password_data.old_password, user.password_hash):
+            raise ValueError("Invalid old password")
+        
+        # 更新密码
+        user.password_hash = hash_password(password_data.new_password)
+        user.updated_at = datetime.utcnow()
+        
+        return {"message": "Password changed successfully"}
+    
+    @classmethod
+    def update_profile(cls, user_id: str, profile_data: UserProfileUpdate) -> UserResponse:
+        """更新用户信息
+        
+        Args:
+            user_id: 用户ID
+            profile_data: 用户信息更新数据
+            
+        Returns:
+            更新后的 UserResponse
+            
+        Raises:
+            ValueError: 用户不存在
+        """
+        user = cls._users.get(user_id)
+        if not user:
+            raise ValueError("User not found")
+        
+        # 更新字段
+        if profile_data.name is not None:
+            user.name = profile_data.name
+        if profile_data.organization is not None:
+            user.organization = profile_data.organization
+        
+        user.updated_at = datetime.utcnow()
+        
+        # 统计API Key数量
+        api_keys_count = len(cls._tenant_api_keys.get(user.tenant_id, []))
+        
+        return UserResponse(
+            user_id=user.user_id,
+            email=user.email,
+            name=user.name,
+            organization=user.organization,
+            role=user.role,
+            plan=user.plan,
+            tenant_id=user.tenant_id,
+            created_at=user.created_at,
+            updated_at=user.updated_at,
+            last_login=user.last_login,
+            is_active=user.is_active,
+            api_keys_count=api_keys_count,
+        )
+    
+    @classmethod
     def create_api_key(cls, tenant_id: str, user_id: str, key_data: APIKeyCreate) -> APIKeyResponse:
         """创建 API Key
         
@@ -199,7 +374,7 @@ class AuthService:
             tenant_id: 租户ID
             user_id: 创建者ID
             key_data: API Key数据
-        
+            
         Returns:
             APIKeyResponse (包含完整key，仅此一次)
         """
@@ -236,7 +411,7 @@ class AuthService:
         return APIKeyResponse(
             key_id=key_id,
             name=api_key.name,
-            api_key=full_api_key,  # 仅创建时返回完整key
+            full_key=full_api_key,  # 仅创建时返回完整key
             scope=api_key.scope,
             rate_limit=api_key.rate_limit,
             tenant_id=api_key.tenant_id,
@@ -258,7 +433,7 @@ class AuthService:
                 keys.append(APIKeyResponse(
                     key_id=api_key.key_id,
                     name=api_key.name,
-                    api_key=None,  # 列表不返回完整key
+                    full_key=None,  # 列表不返回完整key
                     scope=api_key.scope,
                     rate_limit=api_key.rate_limit,
                     tenant_id=api_key.tenant_id,
@@ -279,7 +454,7 @@ class AuthService:
         
         Args:
             api_key_str: 完整的API Key字符串
-        
+            
         Returns:
             APIKeyValidation
         """
@@ -384,10 +559,13 @@ class AuthService:
         return None
     
     @classmethod
-    def get_stats(cls) -> Dict[str, int]:
+    def get_stats(cls) -> Dict[str, Any]:
         """获取统计数据"""
         return {
             "total_users": len(cls._users),
+            "active_users": sum(1 for u in cls._users.values() if u.is_active),
             "total_api_keys": len(cls._api_keys),
+            "active_api_keys": sum(1 for k in cls._api_keys.values() if k.is_active),
             "total_tenants": len(cls._tenant_api_keys),
+            "blacklisted_tokens": TokenBlacklist.size(),
         }

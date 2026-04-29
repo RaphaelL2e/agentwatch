@@ -1,8 +1,9 @@
 """
 AgentWatch 认证中间件
-API Key 验证 + JWT Token 验证
+API Key 验证 + JWT Token 验证 + Token提取
 """
 
+from datetime import datetime
 from fastapi import Request, HTTPException, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import Optional, Dict, Any
@@ -15,6 +16,26 @@ from .jwt import verify_token
 
 # HTTP Bearer 认证方案
 security = HTTPBearer(auto_error=False)
+
+
+def extract_token_from_header(authorization: str) -> Optional[str]:
+    """从 Authorization header 提取 token
+    
+    Args:
+        authorization: Authorization header 值
+        
+    Returns:
+        token 字符串或 None
+    """
+    if not authorization:
+        return None
+    
+    # 支持 "Bearer token" 格式
+    if authorization.startswith("Bearer "):
+        return authorization[7:]  # 去掉 "Bearer "
+    
+    # 直接返回 token（无 Bearer 前缀）
+    return authorization
 
 
 async def verify_api_key(request: Request) -> Dict[str, Any]:
@@ -225,6 +246,11 @@ class RateLimiter:
         current_minute = datetime.utcnow().strftime("%Y%m%d%H%M")
         usage = cls._usage.get(key_id, {}).get(current_minute, 0)
         return max(0, rate_limit - usage)
+    
+    @classmethod
+    def clear(cls) -> None:
+        """清空使用记录"""
+        cls._usage.clear()
 
 
 async def rate_limit_check(request: Request) -> None:
@@ -237,6 +263,3 @@ async def rate_limit_check(request: Request) -> None:
                 status_code=429,
                 detail="Rate limit exceeded. Try again later."
             )
-
-
-from datetime import datetime  # 添加缺失的导入

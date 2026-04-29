@@ -153,16 +153,37 @@ agentwatch/
 - [x] 72个 Backend 测试 + 72个 SDK 测试
 - [x] Cost Comparison API (DeepSeek 107x 成本优势)
 
-### Week 3 (当前)
+### Week 3 ✅
 - [x] 用户认证系统 (JWT + API Key)
+- [x] DeepSeek 成本对比 API (4端点)
+- [x] 前端登录/注册页面
 - [ ] 团队管理
 - [ ] 数据导出
-- [ ] 首批用户获取 (HN Show HN)
 
-### Week 4
-- [ ] npm CLI 发布
-- [ ] GitHub Marketplace 上架
+### Week 4 (当前)
+- [ ] 认证系统完善 (Token黑名单/刷新令牌)
+- [ ] PyPI 发布
 - [ ] 生产环境部署
+- [ ] HN Show HN 发布
+
+### Week 5-6
+- [ ] 数据持久化 (SQLite/PostgreSQL)
+- [ ] 测试覆盖率 90%
+- [ ] Docker 镜像发布
+
+### Week 7-8
+- [ ] 团队协作功能
+- [ ] 高级分析 (趋势预测/异常检测)
+- [ ] SLA 监控
+
+### Month 3
+- [ ] 商业化启动 (Stripe计费)
+- [ ] 定价页面
+- [ ] 首批付费用户
+
+### Month 6
+- [ ] 企业功能 (SSO/RBAC)
+- [ ] MRR $2000
 
 ## 🤝 贡献
 
