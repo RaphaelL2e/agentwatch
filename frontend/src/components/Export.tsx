@@ -3,7 +3,8 @@ import { api } from '../api';
 import { Download, FileJson, FileSpreadsheet, BarChart2, Filter, Calendar } from 'lucide-react';
 
 export default function Export() {
-  const [format, setFormat] = useState<'json' | 'csv'>('json');
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [_format, _setFormat] = useState<'json' | 'csv'>('json');
   const [provider, setProvider] = useState<string>('');
   const [status, setStatus] = useState<string>('');
   const [days, setDays] = useState<number>(7);

@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { useState, useEffect } from 'react'
-import { Activity, DollarSign, Clock, AlertCircle, CheckCircle2, Loader2, Wifi, WifiOff, AlertTriangle, TrendingUp, Zap, ArrowUpRight, ArrowDownRight } from 'lucide-react'
+import { Activity, DollarSign, Clock, AlertCircle, CheckCircle2, Loader2, Wifi, WifiOff, AlertTriangle, ArrowUpRight, ArrowDownRight } from 'lucide-react'
 import { api } from '../api'
 import { useWebSocket } from '../hooks/useWebSocket'
 import { CostAlerts, ProviderCostBreakdown, CostSavingSuggestions } from './CostAlerts'

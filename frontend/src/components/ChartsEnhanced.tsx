@@ -3,8 +3,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useWebSocket } from '../hooks/useWebSocket';
 import { api } from '../api';
 import { 
-  TrendingUp, Activity, Zap, PieChart as PieChartIcon, BarChart2, 
-  ToggleLeft, ToggleRight, AlertTriangle, Clock, DollarSign,
+  TrendingUp, Activity, Zap, AlertTriangle, Clock, DollarSign,
   ArrowUpRight, ArrowDownRight, Minus
 } from 'lucide-react';
 
@@ -110,7 +109,10 @@ function AnimatedBarChart({
     const openaiData = data.find(d => d.provider === 'openai');
     const currentData = data.find(d => d.provider === provider);
     if (!openaiData || !currentData || provider === 'openai') return null;
-    const ratio = openaiData[metric] / currentData[metric];
+    const openaiValue = openaiData[metric] as number;
+    const currentValue = currentData[metric] as number;
+    if (!openaiValue || !currentValue) return null;
+    const ratio = openaiValue / currentValue;
     return ratio > 1 ? `${ratio.toFixed(1)}x cheaper` : ratio < 1 ? `${(1/ratio).toFixed(1)}x expensive` : 'same';
   };
   
@@ -399,7 +401,7 @@ function getColor(index: number): string {
 export default function Charts() {
   const queryClient = useQueryClient();
   const [timeRange, setTimeRange] = useState(24);
-  const [selectedMetric, setSelectedMetric] = useState<'traces' | 'cost' | 'tokens' | 'latency'>('cost');
+  const [selectedMetric, _setSelectedMetric] = useState<'traces' | 'cost' | 'tokens' | 'latency'>('cost');
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [newTrace, setNewTrace] = useState<any>(null);
   

@@ -4,7 +4,7 @@ import { api } from '../api';
 import { TrendingUp, DollarSign, Zap, Calculator, ArrowRight, CheckCircle, AlertCircle } from 'lucide-react';
 
 // Provider cost data (per 1K tokens)
-const PROVIDER_COSTS = {
+const PROVIDER_COSTS: Record<string, Record<string, { input: number; output: number }>> = {
   openai: {
     gpt_4o: { input: 0.005, output: 0.015 },
     gpt_4o_mini: { input: 0.00015, output: 0.0006 },
@@ -23,14 +23,14 @@ const PROVIDER_COSTS = {
   },
 };
 
-const PROVIDER_NAMES = {
+const PROVIDER_NAMES: Record<string, string> = {
   openai: 'OpenAI',
   anthropic: 'Anthropic',
   deepseek: 'DeepSeek',
   google: 'Google',
 };
 
-const MODEL_NAMES = {
+const MODEL_NAMES: Record<string, string> = {
   gpt_4o: 'GPT-4o',
   gpt_4o_mini: 'GPT-4o-mini',
   claude_3_5_sonnet: 'Claude 3.5 Sonnet',
@@ -60,7 +60,7 @@ function calculateSavings(
   targetModel: string,
   monthlyTokens: number,
   inputRatio: number = 0.7, // 70% input tokens, 30% output tokens typical
-): SavingsCalculation {
+): SavingsCalculation | null {
   const currentCosts = PROVIDER_COSTS[currentProvider]?.[currentModel];
   const targetCosts = PROVIDER_COSTS[targetProvider]?.[targetModel];
 
@@ -214,10 +214,7 @@ export default function CostOptimization() {
     queryFn: () => api.getStats(),
   });
 
-  // Calculate real monthly tokens from stats if available
-  const realMonthlyTokens = stats?.total_input_tokens && stats?.total_output_tokens
-    ? (stats.total_input_tokens + stats.total_output_tokens) * 30 // Estimate monthly from daily
-    : monthlyTokens;
+  // Note: Real monthly tokens can be calculated from stats when needed
 
   return (
     <div className="p-8">
@@ -347,19 +344,19 @@ export default function CostOptimization() {
             <div className="p-4 bg-gray-800 rounded-lg">
               <p className="text-sm text-gray-400">Current Annual Cost</p>
               <p className="text-2xl font-bold text-white">
-                ${(currentCalculation?.currentCost * 12 || 0).toFixed(2)}
+                ${((currentCalculation?.currentCost ?? 0) * 12).toFixed(2)}
               </p>
             </div>
             <div className="p-4 bg-gray-800 rounded-lg">
               <p className="text-sm text-gray-400">New Annual Cost</p>
               <p className="text-2xl font-bold text-green-400">
-                ${(currentCalculation?.targetCost * 12 || 0).toFixed(2)}
+                ${((currentCalculation?.targetCost ?? 0) * 12).toFixed(2)}
               </p>
             </div>
             <div className="p-4 bg-gray-800 rounded-lg">
               <p className="text-sm text-gray-400">Annual Savings</p>
               <p className="text-2xl font-bold text-green-400">
-                ${(currentCalculation?.savings * 12 || 0).toFixed(2)}
+                ${((currentCalculation?.savings ?? 0) * 12).toFixed(2)}
               </p>
             </div>
           </div>
