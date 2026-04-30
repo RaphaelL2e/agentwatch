@@ -196,12 +196,16 @@ function CostComparison() {
             Based on your traces tracked by AgentWatch
           </p>
           <div className="space-y-2">
-            {Object.entries(modelCosts).map(([model, cost]) => (
-              <div key={model} className="flex items-center justify-between bg-slate-700/50 rounded-lg p-3">
-                <span className="text-white">{model}</span>
-                <span className="text-green-400 font-semibold">${(cost as number).toFixed(4)}</span>
-              </div>
-            ))}
+            {Object.entries(modelCosts).flatMap(([provider, models]) =>
+              Object.entries(models as Record<string, { input: number; output: number }>).map(([model, pricing]) => (
+                <div key={`${provider}-${model}`} className="flex items-center justify-between bg-slate-700/50 rounded-lg p-3">
+                  <span className="text-white">{model}</span>
+                  <span className="text-green-400 font-semibold">
+                    Input: ${pricing.input.toFixed(5)} / Output: ${pricing.output.toFixed(5)}
+                  </span>
+                </div>
+              ))
+            )}
           </div>
         </div>
       )}
