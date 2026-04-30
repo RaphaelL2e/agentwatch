@@ -5,6 +5,7 @@ import { Activity, DollarSign, Clock, AlertCircle, CheckCircle2, Loader2, Wifi, 
 import { api } from '../api'
 import { useWebSocket } from '../hooks/useWebSocket'
 import { CostAlerts, ProviderCostBreakdown, CostSavingSuggestions } from './CostAlerts'
+import { useLanguage } from '../LanguageContext'
 
 // 实时预警类型
 interface RealtimeAlert {
@@ -194,6 +195,7 @@ function RealtimeAlertsPanel({ alerts }: { alerts: RealtimeAlert[] }) {
 
 // Dashboard 主组件（增强版）
 function Dashboard() {
+  const { t } = useLanguage()
   const queryClient = useQueryClient()
   const [alerts, setAlerts] = useState<RealtimeAlert[]>([])
   const [newTraceIds, setNewTraceIds] = useState<Set<string>>(new Set())
@@ -279,7 +281,7 @@ function Dashboard() {
         : 'bg-red-500/20 text-red-500'
     }`}>
       {isConnected ? <Wifi className="w-3 h-3 mr-1 animate-pulse" /> : <WifiOff className="w-3 h-3 mr-1" />}
-      {isConnected ? 'Live' : connectionStatus === 'connecting' ? 'Connecting...' : 'Offline'}
+      {isConnected ? t.dashboard.live : connectionStatus === 'connecting' ? t.common.loading : 'Offline'}
     </span>
   )
   
@@ -288,7 +290,7 @@ function Dashboard() {
       {/* 统计卡片（增强版，带趋势） */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <StatCard
-          title="Total Traces"
+          title={t.dashboard.totalTraces}
           value={stats?.total_traces || 0}
           previousValue={previousStats?.total_traces}
           trend={getTrend(stats?.total_traces || 0, previousStats?.total_traces)}
@@ -296,7 +298,7 @@ function Dashboard() {
           color="text-primary-500"
         />
         <StatCard
-          title="Completed"
+          title={t.dashboard.completed}
           value={stats?.completed_traces || 0}
           previousValue={previousStats?.completed_traces}
           trend={getTrend(stats?.completed_traces || 0, previousStats?.completed_traces)}
@@ -304,7 +306,7 @@ function Dashboard() {
           color="text-green-500"
         />
         <StatCard
-          title="Running"
+          title={t.dashboard.running}
           value={stats?.running_traces || 0}
           previousValue={previousStats?.running_traces}
           trend={getTrend(stats?.running_traces || 0, previousStats?.running_traces)}
@@ -312,7 +314,7 @@ function Dashboard() {
           color="text-yellow-500"
         />
         <StatCard
-          title="Total Cost"
+          title={t.dashboard.totalCost}
           value={`$${(stats?.total_cost || 0).toFixed(4)}`}
           previousValue={previousStats?.total_cost}
           trend={getTrend(stats?.total_cost || 0, previousStats?.total_cost)}
@@ -330,13 +332,13 @@ function Dashboard() {
                 ? 'bg-green-500/20 text-green-500' 
                 : 'bg-red-500/20 text-red-500'
             }`}>
-              {health?.status === 'healthy' ? '●' : '○'} {health?.status || 'Unknown'}
+              {health?.status === 'healthy' ? '●' : '○'} {health?.status === 'healthy' ? t.dashboard.healthy : health?.status || 'Unknown'}
             </span>
             <WebSocketBadge />
           </div>
           <div className="text-slate-400 text-sm">
-            Version: {health?.version || 'N/A'} | 
-            Uptime: {health?.uptime_seconds ? `${Math.floor(health.uptime_seconds / 60)}m` : 'N/A'}
+            {t.dashboard.version}: {health?.version || 'N/A'} | 
+            {t.dashboard.uptime}: {health?.uptime_seconds ? `${Math.floor(health.uptime_seconds / 60)}m` : 'N/A'}
           </div>
         </div>
       </div>
@@ -356,16 +358,16 @@ function Dashboard() {
       {/* Trace 列表 */}
       <div className="card">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-white">Recent Traces</h2>
+          <h2 className="text-lg font-semibold text-white">{t.dashboard.recentTraces}</h2>
           <span className="text-slate-400 text-sm">
-            {traces?.total || 0} total
+            {traces?.total || 0} {t.dashboard.total}
           </span>
         </div>
         
         {tracesLoading ? (
           <div className="flex items-center justify-center py-8">
             <Loader2 className="w-8 h-8 animate-spin text-primary-500" />
-            <span className="ml-2 text-slate-400">Loading traces...</span>
+            <span className="ml-2 text-slate-400">{t.common.loading}</span>
           </div>
         ) : traces?.traces?.length > 0 ? (
           <div className="space-y-3">

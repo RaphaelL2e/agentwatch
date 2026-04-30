@@ -5,10 +5,12 @@
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../AuthContext'
+import { useLanguage } from '../LanguageContext'
 
 export default function Register() {
   const navigate = useNavigate()
   const { register } = useAuth()
+  const { lang, t, toggleLang } = useLanguage()
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -32,12 +34,12 @@ export default function Register() {
 
     // 验证密码
     if (formData.password !== formData.confirmPassword) {
-      setError('两次输入的密码不一致')
+      setError(t.register.passwordMismatch)
       return
     }
 
     if (formData.password.length < 8) {
-      setError('密码长度至少8位')
+      setError(t.register.passwordTooShort)
       return
     }
 
@@ -54,7 +56,7 @@ export default function Register() {
       // 跳转到 Dashboard
       navigate('/')
     } catch (err: any) {
-      setError(err.response?.data?.detail || '注册失败，请稍后重试')
+      setError(err.response?.data?.detail || t.register.error)
     } finally {
       setLoading(false)
     }
@@ -66,24 +68,24 @@ export default function Register() {
         {/* Logo */}
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-white">
-            🔍 AgentWatch
+            🔍 {t.brand.name}
           </h1>
           <p className="text-slate-400 mt-2">
-            创建账号，开始监控你的 AI Agent
+            {t.brand.subtitle}
           </p>
         </div>
 
         {/* 注册表单 */}
         <div className="bg-slate-800 rounded-lg p-8 border border-slate-700">
           <h2 className="text-xl font-semibold text-white mb-6">
-            注册新账号
+            {t.register.title}
           </h2>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* 邮箱 */}
             <div>
               <label className="block text-sm text-slate-400 mb-1">
-                邮箱 *
+                {t.register.email} *
               </label>
               <input
                 type="email"
@@ -91,7 +93,7 @@ export default function Register() {
                 value={formData.email}
                 onChange={handleChange}
                 className="w-full px-4 py-2 bg-slate-900 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
-                placeholder="your@email.com"
+                placeholder={t.register.emailPlaceholder}
                 required
               />
             </div>
@@ -99,7 +101,7 @@ export default function Register() {
             {/* 用户名 */}
             <div>
               <label className="block text-sm text-slate-400 mb-1">
-                用户名
+                {t.register.name}
               </label>
               <input
                 type="text"
@@ -107,14 +109,14 @@ export default function Register() {
                 value={formData.name}
                 onChange={handleChange}
                 className="w-full px-4 py-2 bg-slate-900 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
-                placeholder="你的名字"
+                placeholder={t.register.namePlaceholder}
               />
             </div>
 
             {/* 组织 */}
             <div>
               <label className="block text-sm text-slate-400 mb-1">
-                组织/公司
+                {t.register.organization}
               </label>
               <input
                 type="text"
@@ -122,14 +124,14 @@ export default function Register() {
                 value={formData.organization}
                 onChange={handleChange}
                 className="w-full px-4 py-2 bg-slate-900 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
-                placeholder="公司名称"
+                placeholder={t.register.orgPlaceholder}
               />
             </div>
 
             {/* 密码 */}
             <div>
               <label className="block text-sm text-slate-400 mb-1">
-                密码 *
+                {t.register.password} *
               </label>
               <input
                 type="password"
@@ -137,18 +139,18 @@ export default function Register() {
                 value={formData.password}
                 onChange={handleChange}
                 className="w-full px-4 py-2 bg-slate-900 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
-                placeholder="至少8位，包含字母和数字"
+                placeholder={t.register.passwordPlaceholder}
                 required
               />
               <p className="text-xs text-slate-500 mt-1">
-                密码需包含字母和数字，至少8位
+                {t.register.passwordHint}
               </p>
             </div>
 
             {/* 确认密码 */}
             <div>
               <label className="block text-sm text-slate-400 mb-1">
-                确认密码 *
+                {t.register.confirmPassword} *
               </label>
               <input
                 type="password"
@@ -156,7 +158,7 @@ export default function Register() {
                 value={formData.confirmPassword}
                 onChange={handleChange}
                 className="w-full px-4 py-2 bg-slate-900 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
-                placeholder="再次输入密码"
+                placeholder={t.register.confirmPasswordPlaceholder}
                 required
               />
             </div>
@@ -174,43 +176,53 @@ export default function Register() {
               disabled={loading}
               className="w-full py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-600/50 text-white rounded-lg font-medium transition-colors"
             >
-              {loading ? '注册中...' : '注册'}
+              {loading ? t.register.submitting : t.register.submit}
             </button>
           </form>
 
           {/* 登录链接 */}
           <div className="mt-6 text-center text-slate-400">
-            已有账号？
+            {t.register.hasAccount}
             <Link 
               to="/login" 
               className="text-blue-400 hover:text-blue-300 ml-1"
             >
-              登录
+              {t.register.loginLink}
             </Link>
+          </div>
+
+          {/* 语言切换 */}
+          <div className="mt-4 text-center">
+            <button
+              onClick={toggleLang}
+              className="text-slate-400 hover:text-white text-sm"
+            >
+              {lang === 'en' ? '🇨🇳 切换到中文' : '🇺🇸 Switch to English'}
+            </button>
           </div>
         </div>
 
         {/* 功能介绍 */}
         <div className="mt-8 bg-slate-800/50 rounded-lg p-6">
           <h3 className="text-lg font-medium text-white mb-4">
-            🎯 注册后你将获得
+            🎯 {t.register.benefits.title}
           </h3>
           <ul className="space-y-3 text-slate-400">
             <li className="flex items-start gap-2">
               <span className="text-green-400">✓</span>
-              <span>实时 AI Agent 监控 Dashboard</span>
+              <span>{t.register.benefits.realtimeDashboard}</span>
             </li>
             <li className="flex items-start gap-2">
               <span className="text-green-400">✓</span>
-              <span>DeepSeek 107倍成本对比分析</span>
+              <span>{t.register.benefits.costComparison}</span>
             </li>
             <li className="flex items-start gap-2">
               <span className="text-green-400">✓</span>
-              <span>自动创建 API Key，集成到你的项目</span>
+              <span>{t.register.benefits.apiKey}</span>
             </li>
             <li className="flex items-start gap-2">
               <span className="text-green-400">✓</span>
-              <span>预算监控和告警通知</span>
+              <span>{t.register.benefits.alerts}</span>
             </li>
           </ul>
         </div>
