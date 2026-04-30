@@ -4,10 +4,11 @@
 
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { authApi, tokenManager } from '../authApi'
+import { useAuth } from '../AuthContext'
 
 export default function Login() {
   const navigate = useNavigate()
+  const { login } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -19,15 +20,7 @@ export default function Login() {
     setLoading(true)
 
     try {
-      const response = await authApi.login({ email, password })
-      
-      // 存储 Token
-      tokenManager.setTokens(
-        response.access_token,
-        response.refresh_token,
-        response.user
-      )
-      
+      await login(email, password)
       // 跳转到 Dashboard
       navigate('/')
     } catch (err: any) {

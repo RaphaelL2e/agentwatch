@@ -4,10 +4,11 @@
 
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { authApi, tokenManager } from '../authApi'
+import { useAuth } from '../AuthContext'
 
 export default function Register() {
   const navigate = useNavigate()
+  const { register } = useAuth()
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -43,19 +44,12 @@ export default function Register() {
     setLoading(true)
 
     try {
-      const response = await authApi.register({
+      await register({
         email: formData.email,
         password: formData.password,
         name: formData.name,
         organization: formData.organization,
       })
-      
-      // 存储 Token
-      tokenManager.setTokens(
-        response.access_token,
-        response.refresh_token,
-        response.user
-      )
       
       // 跳转到 Dashboard
       navigate('/')
